@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block title %}教室一覧{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item active" aria-current="page">教室一覧</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1>管理教室一覧</h1>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>教室名</th>
+            <th>所属組織</th>
+            <th>詳細</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for classroom in classrooms %}
+        <tr>
+            <td>{{ classroom.name }}</td>
+            <td>{{ classroom.organization.name }}</td>
+            <td><a href="{% url 'organization_admin:classroom_detail' classroom.pk %}" class="btn btn-sm btn-info">詳細を見る</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if user.role == 'organization_administrator' %}
+    <a href="{% url 'organization_admin:classroom_add' %}" class="btn btn-success mt-3">新規教室作成</a>
+{% endif %}
+
+
+{% endblock %}

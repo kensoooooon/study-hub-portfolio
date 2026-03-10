@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}教室詳細{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">教室詳細</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<h1>{{ classroom.name }}</h1>
+<p>{{ classroom.description }}</p>
+
+<h2>学年別生徒一覧</h2>
+{% for grade_label, students in grouped_students.items %}
+<button class="btn btn-primary mt-3" type="button" data-bs-toggle="collapse" data-bs-target="#grade-{{ grade_label|slugify }}">
+    {{ grade_label }}
+</button>
+<div id="grade-{{ grade_label|slugify }}" class="collapse mt-2">
+    <table class="table table-striped mt-2">
+        <thead>
+            <tr>
+                <th>名前</th>
+                <th>担当講師</th>
+                <th>詳細</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in students %}
+            <tr>
+                <td>{{ student.username }}</td>
+                <td>
+                    {% if student.teachers.exists %}
+                    <ul>
+                        {% for teacher in student.teachers.all %}
+                        <li>{{ teacher.username }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <span>担当講師なし</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'organization_admin:student_detail' student.id %}?classroom_id={{ classroom.id }}" class="btn btn-sm btn-info">詳細を見る</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+
+<h2>講師一覧</h2>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>名前</th>
+            <th>メールアドレス</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for teacher in classroom.teachers.all %}
+        <tr>
+            <td>{{ teacher.username }}</td>
+            <td>{{ teacher.email }}</td>
+            <td>
+                <a href="{% url 'organization_admin:teacher_edit' teacher.pk %}?classroom_id={{ classroom.id }}" class="btn btn-sm btn-info">編集</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="{% url 'organization_admin:teacher_add' %}?next={{ request.get_full_path }}" class="btn btn-success mt-3">新規講師作成</a>
+{% endblock %}
+
+
+{% block script %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const collapses = document.querySelectorAll('[data-bs-toggle="collapse"]');
+
+        // 状態を復元
+        collapses.forEach(button => {
+            const target = button.getAttribute('data-bs-target');
+            if (localStorage.getItem(target) === 'open') {
+                document.querySelector(target).classList.add('show');
+            }
+
+            // 状態を保存
+            button.addEventListener('click', () => {
+                const targetElement = document.querySelector(target);
+                const isExpanded = targetElement.classList.contains('show');
+                localStorage.setItem(target, isExpanded ? 'closed' : 'open');
+            });
+        });
+    });
+</script>
+{% endblock %}

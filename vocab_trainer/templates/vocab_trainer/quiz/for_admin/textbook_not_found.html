@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="text-danger">出題エラー</h2>
+    <p>生徒に紐づけられた教科書の情報が見つかりませんでした。</p>
+    <p>生徒詳細のページで登録していただくか、管理者までご連絡ください。</p>
+
+    <a href="{% url 'organization_admin:student_detail' student_id %}?classroom_id={{ classroom_id }}" class="btn btn-sm btn-info">生徒詳細を見る</a>
+</div>
+{% endblock %}

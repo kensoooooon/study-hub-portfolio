@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}英単語学習履歴{% endblock %}
+
+{% block style %}
+<style>
+    .card {
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        padding: 15px;
+        width: 100%;
+        box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+        transition: transform 0.2s;
+    }
+
+    .card:hover {
+        transform: scale(1.05);
+    }
+
+    .card h5 {
+        font-size: 1.2em;
+        color: #333;
+    }
+
+    .card p {
+        color: #666;
+    }
+
+    .loading-spinner {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student:home' %}">ホーム</a></li>
+        <li class="breadcrumb-item active" aria-current="page">英単語学習履歴</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>学習履歴</h2>
+            <div class="row">
+                {% for progress in word_progresses %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ progress.context.relation.english_word.word }}</h5>
+                                <p class="card-text">意味: {{ progress.context.relation.japanese_meaning.meaning }}</p>
+                                <p>チャプター: {{ progress.context.chapter.title }}</p>
+                                <p>正答率: {{ progress.percent_accuracy }}%</p>
+                                <p>最終学習日: {{ progress.last_answered_at|date:"Y/m/d H:i" }}</p>
+                                <p>優先度: {{ progress.review_priority|floatformat:2 }}</p>
+
+                                <!-- ✅ 確認学習ボタン -->
+                                <button class="btn btn-primary study-button"
+                                        data-url="{% url 'vocab_trainer:study_card' progress.id %}">
+                                    確認学習
+                                </button>
+
+                                <!-- ✅ ロード中の表示を追加 -->
+                                <div class="loading-spinner">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p>ロード中…しばらくお待ちください</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p>まだ学習した単語がありません。</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    document.querySelectorAll('.study-button').forEach(button => {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+
+            // ✅ ボタンを無効化して連打防止
+            button.disabled = true;
+
+            // ✅ ロード中の表示を開始
+            const spinner = button.parentElement.querySelector('.loading-spinner');
+            spinner.style.display = 'block';
+            button.style.display = 'none';
+
+            // ✅ 通常のページ遷移に変更
+            const url = button.getAttribute('data-url');
+            window.location.href = url;
+        });
+    });
+</script>
+{% endblock %}

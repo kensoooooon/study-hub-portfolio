@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <!-- ✅ 役割に応じた一覧ページへのリンク (担当生徒一覧 / 教室一覧) -->
+        {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+            </li>
+            {% if classroom_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_detail' classroom_id %}">教室詳細</a>
+            </li>
+            {% endif %}
+        {% elif user.role == 'teacher' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:teacher_dashboard' %}">担当生徒一覧</a>
+            </li>
+        {% endif %}
+
+        <!-- ✅ 生徒詳細へのリンク -->
+        <li class="breadcrumb-item">
+            <a href="{% url 'organization_admin:student_detail' student.id %}?classroom_id={{ classroom_id|default_if_none:'' }}">生徒詳細</a>
+        </li>
+
+        <!-- ✅ クイズ選択ページ -->
+        <li class="breadcrumb-item">
+            <a href="#" onclick="submitQuizTypeSelectForm()" class="text-decoration-underline text-primary">クイズ選択</a>
+
+            <!-- ✅ クイズ選択への POST フォーム (hidden) -->
+            <form id="quiz-type-select-form" method="post" action="{% url 'vocab_trainer:quiz_type_select_with_admin' %}" style="display:none;">
+                {% csrf_token %}
+                <input type="hidden" name="target_student_id" value="{{ student.id }}">
+                <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+                <input type="hidden" name="context_id" value="{{ context.id }}">
+                <button type="submit" class="btn btn-link p-0" style="border:none; background:none; color:inherit; text-decoration:underline;">クイズ選択</button>
+            </form>
+        </li>        
+        <!-- ✅ 現在のページ (クイズ実行中) -->
+        <li class="breadcrumb-item active" aria-current="page">クイズ実行中</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+
+{% block content %}
+<h2>{{ student.username }} さんのクイズ</h2>
+<p>問題: {{ question_text }}</p>
+
+<audio id="audio-player" controls style="display: none;">
+    <source id="audio-source" type="audio/mpeg">
+    音声を再生できませんでした。
+</audio>
+
+<form id="quiz-form" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="quiz_mode" value="{{ quiz_mode }}">
+    <input type="hidden" name="quiz_type" value="{{ quiz_type }}">
+    <input type="hidden" name="correct_answer" value="{{ correct_answer }}">
+    <input type="hidden" name="question_text" value="{{ question_text }}">
+    <input type="hidden" name="target_student_id" value="{{ student.id }}">
+    <input type="hidden" name="context_id" value="{{ context.id }}">
+
+    <div class="form-group">
+        {% for choice in choices %}
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="selected_answer" value="{{ choice }}" id="choice_{{ forloop.counter }}" required>
+            <label class="form-check-label" for="choice_{{ forloop.counter }}">
+                {{ choice }}
+            </label>
+        </div>
+        {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-success mt-3" id="submit-button">回答する</button>
+</form>
+
+<!-- ✅ クイズ結果表示エリア -->
+<div id="result" style="display:none;" class="mt-4">
+    <h3 id="result-message"></h3>
+    <p id="correct-answer" class="text-danger" style="font-weight: bold;"></p>
+    <p id="part-of-speech" class="text-muted"></p>
+    <p id="example-sentence" class="text-muted"></p>
+
+    <!-- ✅ 次の問題へのリンク -->
+    <form id="next-question-form" method="post" action="">
+        {% csrf_token %}
+        <input type="hidden" name="target_student_id" value="{{ student.id }}">
+        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+        <input type="hidden" name="quiz_type" value="{{ quiz_type }}">
+        <input type="hidden" name="quiz_mode" value="{{ quiz_mode }}">
+        {% if quiz_mode == 'chapter' %}
+            {% for chapter_id in chapter_ids %}
+                <input type="hidden" name="chapter_ids" value="{{ chapter_id }}">
+            {% endfor %}
+        {% endif %}
+        <input type="hidden" name="context_id" value="{{ context.id }}">
+        <button type="submit" class="btn btn-primary mt-3">次の問題へ</button>
+    </form>
+</div>
+
+<!-- ✅ 採点中のスピナー -->
+<div id="loading" style="display:none;" class="mt-3">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">採点中...</span>
+    </div>
+    <p>採点中…しばらくお待ちください</p>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    document.getElementById('quiz-form').onsubmit = function(event) {
+        event.preventDefault();
+
+        document.getElementById('submit-button').disabled = true;
+        document.getElementById('quiz-form').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+
+        var formData = new FormData(this);
+
+        fetch("{% url 'vocab_trainer:check_answer_with_admin' %}", {
+            method: "POST",
+            headers: {
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('result').style.display = 'block';
+
+            if (data.is_correct) {
+                document.getElementById('result-message').innerText = '正解！🎉';
+                document.getElementById('correct-answer').style.display = 'none';
+            } else {
+                document.getElementById('result-message').innerText = '不正解…😢';
+                document.getElementById('correct-answer').innerText = '正しい解答: ' + data.correct_answer;
+                document.getElementById('correct-answer').style.display = 'block';
+            }
+
+            // ✅ 品詞と例文の表示
+            document.getElementById('part-of-speech').innerText = '品詞: ' + data.part_of_speech;
+            document.getElementById('example-sentence').innerText = '例文: ' + (data.example_sentence || '例文が登録されていません');
+
+            // ✅ 次の問題への URL 設定
+            document.getElementById('next-question-form').action = data.next_url;
+        })
+        .catch(error => {
+            reportErrorToDev('エラーが発生しました:', error);
+            alert('エラーが発生しました。もう一度お試しください。');
+            document.getElementById('submit-button').disabled = false;
+            document.getElementById('quiz-form').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        });
+    };
+</script>
+
+<script>
+    // ✅ クイズ選択への POST をトリガー
+    function submitQuizTypeSelectForm() {
+        document.getElementById('quiz-type-select-form').submit();
+    }
+</script>
+
+
+<script>
+    const audio = document.getElementById('audio-player');
+    const source = document.getElementById('audio-source');
+    const contextId = "{{ context.id }}";
+    const mediaURL = "{{ MEDIA_URL }}";
+    let filenames = [];
+
+    fetch("{% url 'audio_support:speak_word' %}?context_id=" + contextId)
+        .then(response => {
+            if (!response.ok) {
+                reportWarningToDev("音声ファイル名の取得に失敗しました。status:", response.status);
+                return null;
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.filename) {
+                const fileUrl = mediaURL + "temp_audio/" + data.filename;
+                filenames.push(data.filename); // ✅ 忘れずに記録
+                source.src = fileUrl;
+                audio.style.display = 'block';
+                audio.load();
+            } else {
+                reportWarningToDev("不正なレスポンス形式:", data);
+            }
+        })
+        .catch(error => {
+            reportErrorToDev("音声ファイル名取得中にエラーが発生:", error);
+        });
+
+    // ✅ ページ離脱時に削除を依頼（POST）
+    let deleted = false;
+
+    window.addEventListener("visibilitychange", () => {
+        if (deleted || document.visibilityState !== "hidden") return;
+        deleted = true;
+
+        if (!filenames.length) return;
+        const data = new FormData();
+        data.append("filenames", filenames.join(","));
+        navigator.sendBeacon("{% url 'audio_support:delete_temp_audio_post_batch' %}", data);
+    });
+
+</script>
+{% endblock %}

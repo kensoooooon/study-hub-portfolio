@@ -1,0 +1,196 @@
+{% extends 'math_trainer/common/base.html' %}
+
+{% load static %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% include "math_trainer/common/breadcrumbs.html" %}
+        {% if classroom_id and student_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:index' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">計算練習一覧</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:elementary2:problem_select' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">2年生の計算練習一覧</a>
+            </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">時計</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block script %}
+<script src="https://code.createjs.com/1.0.0/createjs.min.js"></script>
+<script src="{% static 'math_trainer/js/elementary2/clock_draw.js' %}"></script>
+<script>
+function drawFromDataset(canvasEl) {
+    const drawType = canvasEl.dataset.drawType;
+    const hours   = canvasEl.dataset.hours.split(',').map(Number);
+    const minutes = canvasEl.dataset.minutes.split(',').map(Number);
+
+    const stage = new createjs.Stage(canvasEl); // ←ID不要なら要素渡しでOK
+    if (drawType === 'double') {
+        if (typeof drawDoubleClock === 'function') {
+        drawDoubleClock(stage, hours[0], minutes[0], hours[1], minutes[1]);
+        }
+    } else {
+        if (typeof drawSingleClock === 'function') {
+        drawSingleClock(stage, hours[0], minutes[0]);
+        }
+    }
+    stage.update();
+    }
+
+    // 印刷プレビューでも確実に描くためのフック
+    function drawAll() {
+    document.querySelectorAll('canvas.clock-canvas').forEach(drawFromDataset);
+    }
+    window.addEventListener('DOMContentLoaded', drawAll);
+    window.addEventListener('beforeprint', drawAll);
+
+
+</script>
+{% endblock %}
+
+{% block style %}
+    <style>
+        :root{
+        --page-w: 210mm; 
+        --page-h: 297mm;
+        --marg-h: 10mm;
+        /* 上下余白を別変数に分離して微調整しやすくする */
+        --marg-top: 10mm;
+        --marg-bottom: 10mm;
+        --gap: 1.2rem;            /* ← 2rem → 1.2rem にして行間を詰める */
+        }
+
+        /* A4ページ設定（@page はDOM外なので数値直書きが無難） */
+        @page{ size: A4 portrait; margin: 12mm; }
+
+        /* 1ページの箱。上下paddingは個別変数で調整可能に */
+        .print_page{
+        width: var(--page-w);
+        min-height: var(--page-h);
+        padding: var(--marg-top) var(--marg-h) var(--marg-bottom);
+        }
+
+        /* 2列レイアウトは現状のまま（Bootstrap .row を使わない） */
+        .two-columns{ list-style:none; padding:0; margin:0; }
+        .two-columns .pair{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--gap);
+        margin-bottom: 6mm;        /* ← 1rem より少し小さめの物理値で安定 */
+        break-inside: avoid;
+        page-break-inside: avoid;
+        }
+        .two-columns .cell{ width:auto; }
+
+        /* 余白を食っていた段落marginを軽く抑える */
+        .page_title,
+        .problem_session_id,
+        .problem-text,
+        .answer{
+        margin: 0 0 4mm;
+        }
+
+        /* キャンバスはセル幅にフィット（高さはアスペクト比から自動算出） */
+        .clock-canvas{
+        display:block;
+        width:100%;
+        height:auto;
+        max-width:100%;
+        }
+
+        /* 解答は常時表示（必要に応じてトグル可） */
+        .answer{ 
+        visibility: visible; 
+        }
+
+        /* 印刷時のUI無効化は既存のまま */
+        @media print{
+        .print_page{ page-break-after: always; }
+        nav.navbar, .breadcrumb, .button_container{ display:none !important; }
+        .container{ width:auto !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+        }
+
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="container button_container">
+        <div class="row justify-content-start">
+            <div class="col-6">
+                <form>
+                    <input type="button" class="btn btn-outline-primary" value="印刷する" onclick="window.print()">
+                </form>
+            </div>
+        </div>
+        <br>
+    </div>
+    {% for page in pages %}
+        <section class="print_page">
+        <p class="page_title">問題: No. {{ forloop.counter }}</p>
+        <p class="problem_session_id text-muted">プリントID: {{ page.session_id }}</p>
+        <ol class="two-columns">
+            {% for left, right in page.pairs %}
+            <li class="pair">
+                <div class="cell">
+                {% if left %}
+                    <p class="text-muted"># {{ left.instance_id }}</p>
+                    <p class="problem-text">{{ left.problem_text|linebreaksbr }}</p>
+                    {% if left.metadata.canvas_required %}
+                        <canvas
+                        class="clock-canvas"
+                        width="640" height="320"
+                        data-draw-type="{{ left.metadata.draw.type }}"
+                        data-hours="{% for t in left.metadata.draw.time_information %}{{ t.hour }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                        data-minutes="{% for t in left.metadata.draw.time_information %}{{ t.minute }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                        </canvas>
+                    {% endif %}
+                {% endif %}
+                </div>
+                <div class="cell">
+                {% if right %}
+                    <p class="text-muted"># {{ right.instance_id }}</p>
+                    <p class="problem-text">{{ right.problem_text|linebreaksbr }}</p>
+                    {% if right.metadata.canvas_required %}
+                        <canvas
+                        class="clock-canvas"
+                        width="640" height="320"
+                        data-draw-type="{{ right.metadata.draw.type }}"
+                        data-hours="{% for t in right.metadata.draw.time_information %}{{ t.hour }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                        data-minutes="{% for t in right.metadata.draw.time_information %}{{ t.minute }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                        </canvas>
+                    {% endif %}
+                {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ol>
+        <footer class="print_footer"><small>© 2025 有明学習振興</small></footer>
+        </section>
+        <section class="print_page">
+        <p class="page_title">解答: No. {{ forloop.counter }}</p>
+        <ol class="two-columns">
+            {% for left, right in page.pairs %}
+            <li class="pair">
+                <div class="cell">
+                {% if left %}
+                    <p class="text-muted"># {{ left.instance_id }}</p>
+                    <p class="answer">{{ left.answer_text|linebreaksbr }}</p>
+                {% endif %}
+                </div>
+                <div class="cell">
+                {% if right %}
+                    <p class="text-muted"># {{ right.instance_id }}</p>
+                    <p class="answer">{{ right.answer_text|linebreaksbr }}</p>
+                {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ol>
+        <footer class="print_footer"><small>© 2025 有明学習振興</small></footer>
+        </section>
+    {% endfor %}
+{% endblock %}

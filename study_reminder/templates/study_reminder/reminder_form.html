@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}リマインダー編集{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+            </li>
+            {% if request.GET.next %}
+                <li class="breadcrumb-item">
+                    <a href="{{ request.GET.next }}">元の教室</a>
+                </li>
+            {% endif %}
+        {% elif user.role == 'teacher' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:teacher_dashboard' %}">担当生徒一覧</a>
+            </li>
+        {% endif %}
+        {% if student and student.pk %}
+        <li class="breadcrumb-item">
+            <a href="{% url 'organization_admin:student_detail' student.pk %}">生徒詳細</a>
+        </li>
+        {% else %}
+            <li class="breadcrumb-item">不明な生徒</li>
+        {% endif %}
+        <!-- リマインダー編集を追加 -->
+        {% if request.resolver_match.url_name == 'reminder_edit' %}
+        <li class="breadcrumb-item active" aria-current="page">リマインダー編集</li>
+        {% endif %}
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% if messages %}
+    <div class="alert alert-success">
+        {% for message in messages %}
+            {{ message }}
+        {% endfor %}
+    </div>
+{% else %}
+<div class="card shadow-sm p-4">
+    <h1 class="mb-4">リマインダー作成・編集</h1>
+    <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+            {{ form.day_of_week.label_tag }}
+            {{ form.day_of_week }}
+        </div>
+        <div class="mb-3">
+            {{ form.time_of_day.label_tag }}
+            {{ form.time_of_day }}
+        </div>
+        <div class="mb-3">
+            {{ form.custom_message.label_tag }}
+            {{ form.custom_message }}
+        </div>
+        <div class="d-flex justify-content-between">
+            <button type="submit" class="btn btn-success">保存</button>
+            <!-- next パラメータを利用して元の場所に戻る -->
+            <a href="{{ request.GET.next|default:'student_list' }}" class="btn btn-secondary">キャンセル</a>
+            <!-- 削除ボタン -->
+            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                削除
+            </button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<!-- 削除確認モーダル -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">リマインダー削除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                このリマインダーを削除しますか？
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <form method="post" action="{% url 'reminder_delete' object.id %}" id="modal-delete-form">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">削除</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("modal-delete-form");
+    const button = document.getElementById("modal-delete-button");
+
+    if (form && button) {
+        form.addEventListener("submit", function () {
+            // 1回送信したらボタン無効化＆文言変更
+            button.disabled = true;
+            button.innerText = "削除中...";
+        });
+    }
+});
+</script>
+{% endblock %}

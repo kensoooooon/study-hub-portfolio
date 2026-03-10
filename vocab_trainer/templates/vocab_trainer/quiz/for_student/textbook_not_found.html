@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="text-danger">出題エラー</h2>
+    <p>教科書の情報が見つかりませんでした。</p>
+    <p>担当の先生か、管理者までご連絡ください。</p>
+
+    <a href="{% url 'student:home' %}" class="btn btn-sm btn-info">ホームに戻る</a>
+</div>
+{% endblock %}

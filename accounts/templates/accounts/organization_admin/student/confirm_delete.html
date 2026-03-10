@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}生徒削除確認{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+            </li>
+            {% if classroom_id %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'organization_admin:classroom_detail' classroom_id %}">教室詳細</a>
+                </li>
+            {% endif %}
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">生徒削除確認</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1>生徒削除確認</h1>
+
+<p>以下の生徒を本当に削除しますか？</p>
+
+<ul>
+    <li>名前: {{ object.username }}</li>
+    <li>学年: {{ object.get_grade_display }}</li>
+    {% if object.line_user_id %}
+        <li>LINE ID: {{ object.line_user_id }}</li>
+    {% endif %}
+</ul>
+
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    <button type="submit" class="btn btn-danger">削除する</button>
+    <a href="{% url 'organization_admin:student_detail' object.pk %}?classroom_id={{ classroom_id }}" class="btn btn-secondary">キャンセル</a>
+</form>
+{% endblock %}

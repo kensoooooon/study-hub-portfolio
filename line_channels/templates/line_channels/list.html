@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}管理チャンネル一覧{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item active" aria-current="page">教室一覧</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1>管理チャンネル一覧</h1>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>組織名</th>
+            <th>作成日</th>
+            <th>更新日</th>
+            <th>有効</th>
+            <th>詳細</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for channel in channels %}
+        <tr>
+            <td>{{ channel.organization.name }}</td>
+            <td>{{ channel.created_at }}</td>
+            <td>{{ channel.updated_at }}</td>
+            <td>
+                {% if channel.is_active %}
+                    ◯
+                {% else %}
+                    ✕
+                {% endif %}
+            </td>
+            <td><a href="{% url 'line_channels:detail' channel.id %}" class="btn btn-sm btn-info">詳細を見る</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+
+{% endblock %}

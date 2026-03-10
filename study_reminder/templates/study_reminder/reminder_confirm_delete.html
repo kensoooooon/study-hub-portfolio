@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}リマインダー削除確認{% endblock %}
+{% block content %}
+<div class="alert alert-danger" role="alert">
+    <h4 class="alert-heading">リマインダー削除確認</h4>
+    <p>以下のリマインダーを削除してもよろしいですか？</p>
+    <ul>
+        <li><strong>曜日:</strong> {{ object.get_day_of_week_display }}</li>
+        <li><strong>時間:</strong> {{ object.time_of_day }}</li>
+        <li><strong>メッセージ:</strong> {{ object.custom_message|default_if_none:"ChatGPTの自動メッセージ" }}</li>
+    </ul>
+    <hr>
+    <form method="post" id="delete-form">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger" id="delete-button">削除</button>
+        <a href="{% url 'reminder_list' %}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}
+
+
+{% block script %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("delete-form");
+    const button = document.getElementById("delete-button");
+
+    if (form && button) {
+        form.addEventListener("submit", function () {
+            // 1回押されたらボタンを無効化＆文言変更
+            button.disabled = true;
+            button.innerText = "削除中...";
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,258 @@
+{% extends 'math_trainer/common/base.html' %}
+{% load static %}
+
+{% block breadcrumbs %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            {% include "math_trainer/common/breadcrumbs.html" %}
+            {% if classroom_id and student_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:index' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">計算練習一覧</a>
+            </li>
+            {% endif %}
+            <li class="breadcrumb-item active" aria-current="page">採点フォーム</li>
+        </ol>
+    </nav>
+{% endblock %}
+
+{% block style %}
+<style>
+/* 未選択の行をやや目立たせる */
+.grade-row:not(.graded) { background: rgba(255, 193, 7, .08); } /* warning色を薄く */
+
+/*マウスホバー時の変色*/
+.table-hover tbody tr {
+    cursor: pointer;
+}
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.1); /* Bootstrap青を薄く */
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    {% if mode == "index" %}
+        <h1 class="mb-3">採点対象の選択</h1>
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>対象セッション（直近）</strong>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                    <th style="width:10rem;">プリントID</th>
+                    <th style="width:15rem;">分野</th>
+                    <th style="width:14rem;">問題ID範囲</th>
+                    <th style="width:13rem;">作成日時</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for s in page_obj %}
+                    <tr data-session-id="{{ s.id }}">
+                        <td>#{{ s.id }}</td>
+                        {% if s.problem_type %}
+                            <td>{{ s.problem_type.name }}</td>
+                        {% else %}
+                            <td>分野名なし</td>
+                        {% endif %}
+                        {% if s.min_inst_id and s.max_inst_id %}
+                            <td>{{ s.min_inst_id }}～{{ s.max_inst_id }}</td>
+                        {% else %}
+                            <td>----</td>
+                        {% endif %}
+                        <td>{{ s.created_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4" class="text-muted p-3">該当するセッションがありません。</td></tr>
+                {% endfor %}
+                </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if is_paginated %}
+        <nav aria-label="セッション一覧 ページネーション" class="m-3">
+        <ul class="pagination mb-0">
+
+        {# Prev（安全分岐：has_previousがFalseのときはリンクを生成しない） #}
+        <li class="page-item{% if not page_obj.has_previous %} disabled{% endif %}">
+            {% if page_obj.has_previous %}
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{{ qs_keep }}"
+                aria-label="前のページ">«</a>
+            {% else %}
+            <span class="page-link" aria-disabled="true">«</span>
+            {% endif %}
+        </li>
+
+            {# 省略付きページ番号 #}
+            {% for n in elided_page_range %}
+            {% if n == '…' or n == '...' %}
+                <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+            {% elif n == page_obj.number %}
+                <li class="page-item active" aria-current="page"><span class="page-link">{{ n }}</span></li>
+            {% else %}
+                <li class="page-item"><a class="page-link" href="?page={{ n }}{{ qs_keep }}">{{ n }}</a></li>
+            {% endif %}
+            {% endfor %}
+
+            {# Next #}
+            <li class="page-item{% if not page_obj.has_next %} disabled{% endif %}">
+            {% if page_obj.has_next %}
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{{ qs_keep }}" aria-label="次のページ">»</a>
+            {% else %}
+                <span class="page-link" aria-disabled="true">»</span>
+            {% endif %}
+            </li>
+
+        </ul>
+        </nav>
+        {% endif %}
+
+        <script>
+        // URLを安全に組み立てる（教室ID/生徒IDに特殊文字が入っても壊れない）
+        (() => {
+            document.querySelectorAll('table tbody tr[data-session-id]').forEach(row => {
+            row.addEventListener('click', () => {
+                const params = new URLSearchParams();
+                params.set('session_id', row.dataset.sessionId);
+                {% if classroom_id %} params.set('classroom_id', '{{ classroom_id|escapejs }}'); {% endif %}
+                {% if student_id   %} params.set('student_id',   '{{ student_id|escapejs   }}'); {% endif %}
+                const url = "{% url 'math_trainer:common:score' %}?" + params.toString();
+                window.location.assign(url);
+            });
+            });
+        })();
+        </script>
+
+
+    {% else %}
+        <h1 class="mb-4">採点フォーム</h1>
+        <form method="post"
+            action="{% url 'math_trainer:common:score' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">
+
+        {% csrf_token %}
+        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+        <input type="hidden" name="student_id" value="{{ student_id }}">
+        <input type="hidden" name="session_id" value="{{ session.id }}">
+        {% regroup instances by session as grouped %}
+        {% for group in grouped %}
+            {% with sess=group.grouper %}
+            <div class="card mb-4">
+                <div class="card-header">
+                <strong>プリント #{{ sess.id }}</strong>
+                <span class="text-muted">作成: {{ sess.created_at|date:"Y-m-d H:i" }}</span>
+                </div>
+                <div class="card-body p-0">
+                <table class="table mb-0 align-middle">
+                    <thead class="table-light">
+                    <tr>
+                        <th style="width:14%">問題ID</th>
+                        <th style="width:22%">採点</th>
+                        <th>備考（任意）</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for inst in group.list %}
+                        <tr class="grade-row" data-qname="q_{{ inst.id }}">
+                            <td>#{{ inst.id }}</td>
+                            <td>
+                            <div class="btn-group" role="group" aria-label="grading">
+                                <input type="radio" class="btn-check" name="q_{{ inst.id }}" id="ok{{ inst.id }}" value="1">
+                                <label class="btn btn-outline-success" for="ok{{ inst.id }}">◯ 正解</label>
+
+                                <input type="radio" class="btn-check" name="q_{{ inst.id }}" id="ng{{ inst.id }}" value="0">
+                                <label class="btn btn-outline-danger" for="ng{{ inst.id }}">✕ 不正解</label>
+                            </div>
+                            </td>
+                            <td>
+                            <!-- メモを保存しないなら単なるメモ欄(送信されない)。保存したければ name を付けて models/保存先を用意 -->
+                            <input type="text" class="form-control form-control-sm" placeholder="例: 計算ミス">
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+            </div>
+            {% endwith %}
+            {% empty %}
+                <div class="alert alert-warning">採点対象の問題が見つかりません。</div>
+        {% endfor %}
+
+        <!-- 一括操作 + 送信 -->
+        <div class="d-flex gap-2 justify-content-between flex-wrap my-3">
+            <div class="btn-group" role="group" aria-label="bulk">
+            <button type="button" class="btn btn-outline-success" id="markAllOk">全問 ◯</button>
+            <button type="button" class="btn btn-outline-danger" id="markAllNg">全問 ✕</button>
+            <button type="button" class="btn btn-outline-secondary" id="clearAll">全解除</button>
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg">採点を確定する</button>
+        </div>
+        </form>
+    {% endif %}
+</div>
+
+<script>
+    (() => {
+    // 行の見た目更新
+    function refreshRowState(row){
+        const name = row.dataset.qname;
+        const checked = document.querySelector(`input[name="${name}"]:checked`);
+        row.classList.toggle('graded', !!checked);
+    }
+    document.querySelectorAll('.grade-row').forEach(row => {
+        refreshRowState(row);
+        row.addEventListener('change', e => refreshRowState(row));
+    });
+
+    // 一括操作
+    function setAll(val){  // val: "1" or "0" or null
+        document.querySelectorAll('.grade-row').forEach(row => {
+        const name = row.dataset.qname;
+        const ok = document.querySelector(`input[name="${name}"][value="1"]`);
+        const ng = document.querySelector(`input[name="${name}"][value="0"]`);
+        if (val === "1") ok.checked = true;
+        else if (val === "0") ng.checked = true;
+        else { if (ok) ok.checked = false; if (ng) ng.checked = false; }
+        refreshRowState(row);
+        });
+    }
+    document.getElementById('markAllOk')?.addEventListener('click', () => setAll("1"));
+    document.getElementById('markAllNg')?.addEventListener('click', () => setAll("0"));
+    document.getElementById('clearAll') ?.addEventListener('click', () => setAll(null));
+
+    // 送信前チェック：未採点があればスクロール
+    const form = document.querySelector('form[method="post"]');
+    form?.addEventListener('submit', (e) => {
+        const firstUn = document.querySelector('.grade-row:not(.graded)');
+        if (firstUn){
+        e.preventDefault();
+        firstUn.scrollIntoView({behavior: 'smooth', block: 'center'});
+        firstUn.classList.add('table-warning'); // さらに注意色
+        alert('未採点の問題があります。');
+        }
+    });
+
+    // キーボード操作：↑↓で行移動、1/0で判定
+    let current = 0;
+    const rows = Array.from(document.querySelectorAll('.grade-row'));
+    function focusRow(i){
+        current = Math.max(0, Math.min(rows.length - 1, i));
+        rows[current].querySelector('label').focus({preventScroll:true});
+        rows[current].scrollIntoView({block:'center'});
+    }
+    document.addEventListener('keydown', (e) => {
+        // メモ欄にフォーカス中は無効化
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (['input','textarea','select','button'].includes(tag) || e.target.isContentEditable) return;
+
+        if (e.key === 'ArrowDown'){ focusRow(current + 1); }
+        else if (e.key === 'ArrowUp'){ focusRow(current - 1); }
+        else if (e.key === '1'){ rows[current].querySelector('input[value="1"]').checked = true; rows[current].dispatchEvent(new Event('change')); }
+        else if (e.key === '0'){ rows[current].querySelector('input[value="0"]').checked = true; rows[current].dispatchEvent(new Event('change')); }
+    });
+    })();
+</script>
+{% endblock %}

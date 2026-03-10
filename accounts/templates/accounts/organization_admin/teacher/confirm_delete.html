@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}講師削除確認{% endblock %}
+{% block content %}
+<div class="alert alert-danger" role="alert">
+    <h4 class="alert-heading">講師削除確認</h4>
+    <p>以下の講師を削除してもよろしいですか？</p>
+    <ul>
+        <li><strong>名前:</strong> {{ object.username }}</li>
+        <li><strong>メールアドレス:</strong> {{ object.email }}</li>
+    </ul>
+    <hr>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+        <button type="submit" class="btn btn-danger">削除</button>
+        <a href="{% url 'organization_admin:classroom_detail' classroom_id %}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}

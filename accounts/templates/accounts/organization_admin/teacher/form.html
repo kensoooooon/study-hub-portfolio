@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}講師{{ action }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+        </li>
+        {% if classroom_id %}
+        <li class="breadcrumb-item">
+            <a href="{% url 'organization_admin:classroom_detail' classroom_id %}">教室詳細</a>
+        </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">講師編集</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm p-4">
+    <h1>講師{{ action }}</h1>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+        <div class="mb-3">
+            {{ form.username.label_tag }}
+            {{ form.username }}
+        </div>
+        <div class="mb-3">
+            {{ form.email.label_tag }}
+            {{ form.email }}
+        </div>
+        <div class="mb-3">
+            <label for="{{ form.classrooms.id_for_label }}" class="form-label">担当教室（複数選択可）</label>
+            {{ form.classrooms }}
+        </div>
+        <div class="mb-3">
+            {{ form.password.label_tag }}
+            {{ form.password }}
+            {% if form.password.help_text %}
+                <small class="form-text text-muted">{{ form.password.help_text }}</small>
+            {% endif %}
+        </div>
+        
+        
+        {% if form.reset_password %}
+        <div class="mb-3">
+            <label>
+                {{ form.reset_password }}
+                パスワードをデフォルトにリセット
+            </label>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between">
+            <button type="submit" class="btn btn-success">保存</button>
+            {% if classroom_id %}
+                <a href="{% url 'organization_admin:classroom_detail' classroom_id %}" class="btn btn-secondary">キャンセル</a>
+            {% else %}
+                <a href="{% url 'organization_admin:classroom_list' %}" class="btn btn-secondary">キャンセル</a>
+            {% endif %}
+            {% if object and object.id %}
+                <a href="{% url 'organization_admin:teacher_delete' object.id %}?classroom_id={{ classroom_id }}" class="btn btn-danger">
+                    講師を削除する
+                </a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}

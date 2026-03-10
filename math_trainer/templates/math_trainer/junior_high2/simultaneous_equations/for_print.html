@@ -1,0 +1,169 @@
+{% extends 'math_trainer/common/base.html' %}
+
+{% load static %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% include "math_trainer/common/breadcrumbs.html" %}
+        {% if classroom_id and student_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:index' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">計算練習一覧</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:junior_high2:problem_select' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">中学2年生の計算練習一覧</a>
+            </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">連立方程式</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block script %}
+<script src="https://code.createjs.com/1.0.0/createjs.min.js"></script>
+{% endblock %}
+
+{% block style %}
+<style>
+:root{
+    --page-w: 210mm; 
+    --page-h: 297mm;
+    --marg-h: 10mm;
+    --marg-top: 6mm;
+    --marg-bottom: 6mm;
+    --gap: 0.8rem;   /* 2カラムの左右ギャップ */
+    --row-gap: 4mm;  /* 行間（.pair 同士の縦間） */
+}
+
+/* A4設定 */
+@page{ size: A4 portrait; margin: 8mm; }
+
+/* ページ箱 */
+.print_page{
+    width: var(--page-w);
+    min-height: var(--page-h);
+    padding: var(--marg-top) var(--marg-h) var(--marg-bottom);
+}
+
+/* 本文リスト（行の集合） */
+.two-columns{
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* 1行＝左右2セル */
+.two-columns .pair{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--gap);                 /* 左右の隙間 */
+    break-inside: avoid;
+    page-break-inside: avoid;
+    /* 行間は row-gap に一本化するため margin-bottom は使わない */
+}
+
+.two-columns .cell{ width: auto; }
+
+/* タイトル等の段落マージン抑制 */
+.page_title,
+.problem_session_id,
+.problem-text,
+.answer{
+    margin: 0 0 2mm;
+}
+
+/* 解答は常に表示 */
+.answer{ visibility: visible; }
+
+/* フッターの上マージン */
+.print_footer{ margin-top: 2mm; }
+
+/* 印刷時の最終調整（均等割りのキモはここ） */
+@media print{
+    /* ページを: タイトル / ID / 本文 / フッター の4行グリッドに */
+    .print_page{
+    page-break-after: always;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    }
+
+    /* 本文領域いっぱいに伸ばし、各 .pair を等高さ(1fr)で割り付け */
+    .two-columns{
+    display: grid;
+    grid-auto-rows: 1fr;      /* 各行＝等分で同じ高さ */
+    row-gap: var(--row-gap);  /* 行間 */
+    }
+
+    /* 行間は row-gap に任せる */
+    .two-columns .pair{ margin-bottom: 0; }
+
+    /* セルを縦方向にめいっぱい伸ばす */
+    .two-columns .cell{ align-self: stretch; }
+
+    /* 画面UIは非表示 */
+    nav.navbar, .breadcrumb, .button_container{ display:none !important; }
+    .container{ width:auto !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+}
+</style>
+
+{% endblock %}
+
+{% block content %}
+    <div class="container button_container">
+        <div class="row justify-content-start">
+            <div class="col-6">
+                <form>
+                    <input type="button" class="btn btn-outline-primary" value="印刷する" onclick="window.print()">
+                </form>
+            </div>
+        </div>
+        <br>
+    </div>
+    {% for page in pages %}
+        <section class="print_page">
+        <p class="page_title">問題: No. {{ forloop.counter }}</p>
+        <p class="problem_session_id text-muted">プリントID: {{ page.session_id }}</p>
+        <ol class="two-columns">
+            {% for left, right in page.pairs %}
+            <li class="pair">
+                <div class="cell">
+                {% if left %}
+                    <p class="text-muted"># {{ left.instance_id }}</p>
+                    <p class="problem-text">{{ left.problem_text|linebreaksbr }}</p>
+                {% endif %}
+                </div>
+                <div class="cell">
+                {% if right %}
+                    <p class="text-muted"># {{ right.instance_id }}</p>
+                    <p class="problem-text">{{ right.problem_text|linebreaksbr }}</p>
+                {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ol>
+        <footer class="print_footer"><small>© 2025 有明学習振興</small></footer>
+        </section>
+        <section class="print_page">
+        <p class="page_title">解答: No. {{ forloop.counter }}</p>
+        <ol class="two-columns">
+            {% for left, right in page.pairs %}
+            <li class="pair">
+                <div class="cell">
+                {% if left %}
+                    <p class="text-muted"># {{ left.instance_id }}</p>
+                    <p class="answer">{{ left.answer_text|linebreaksbr }}</p>
+                {% endif %}
+                </div>
+                <div class="cell">
+                {% if right %}
+                    <p class="text-muted"># {{ right.instance_id }}</p>
+                    <p class="answer">{{ right.answer_text|linebreaksbr }}</p>
+                {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ol>
+        <footer class="print_footer"><small>© 2025 有明学習振興</small></footer>
+        </section>
+    {% endfor %}
+{% endblock %}

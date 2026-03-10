@@ -1,0 +1,150 @@
+<!-- templates/reading_trainer/admin_result.html -->
+{% extends "base.html" %}
+
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+            </li>
+            {% if classroom_id %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'organization_admin:classroom_detail' classroom_id %}">教室詳細</a>
+                </li>
+            {% endif %}
+        {% elif user.role == 'teacher' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:teacher_dashboard' %}">担当生徒一覧</a>
+            </li>
+        {% endif %}
+        {% if classroom_id and student %}
+        <li class="breadcrumb-item">
+            <a href="{% url 'organization_admin:student_detail' student.id %}?classroom_id={{ classroom_id }}">生徒詳細</a>
+        </li>
+        {% if is_eiken %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'read_trainer:eiken_quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">英検クイズ選択</a>
+            </li>
+        {% else %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'read_trainer:quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">長文クイズ選択</a>
+            </li>
+        {% endif %}
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">長文解答</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h2>【管理者用】解答結果</h2>
+
+{% if passage.title %}
+    <h4 class="text-primary mt-3">📝 タイトル: {{ passage.title }}</h4>
+{% endif %}
+
+<audio id="audio-player" controls style="display: none;">
+    <source id="audio-source" type="audio/mpeg">
+    音声を再生できませんでした。
+</audio>
+
+
+<p class="mt-4">{{ passage.content|linebreaks }}</p>
+
+{% if passage.japanese_translation %}
+  <p class="mt-4"><strong>日本語訳：</strong></p>
+  <p>{{ passage.japanese_translation|linebreaks }}</p>
+{% endif %}
+<hr>
+
+{% for result in results %}
+  <div class="mb-4">
+    <h4>Q{{ forloop.counter }}: {{ result.question.question_text }}</h4>
+
+    {% if result.is_correct %}
+      <p class="text-success">✅ 正解</p>
+    {% else %}
+      <p class="text-danger">❌ 不正解（選んだ: {{ result.selected_option }} / 正解: {{ result.correct_option }}）</p>
+    {% endif %}
+
+    <ul class="list-unstyled">
+      {% for option_label, option_text in result.options %}
+        <li>
+          {% if option_label == result.correct_option %}
+            <strong class="text-success">✔ {{ option_label }}: {{ option_text }}</strong>
+          {% elif option_label == result.selected_option %}
+            <strong class="text-danger">✖ {{ option_label }}: {{ option_text }}</strong>
+          {% else %}
+            {{ option_label }}: {{ option_text }}
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    {% if not result.is_correct %}
+      <p class="text-muted">解説: {{ result.question.explanation }}</p>
+    {% endif %}
+  </div>
+{% endfor %}
+
+<hr>
+
+<div class="d-flex justify-content-between mt-5">
+{% if is_eiken %}
+  <a href="{% url 'read_trainer:eiken_quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">英検クイズ選択</a>
+{% else %}
+  <a href="{% url 'read_trainer:quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">長文クイズ選択</a>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    const audio = document.getElementById("audio-player");
+    const source = document.getElementById("audio-source");
+    const filenamesRaw = "{{ audio_file_names|escapejs }}";
+    let filename = filenamesRaw.trim();
+    let isLoading = false;
+    const mediaURL = "{{ MEDIA_URL }}";
+
+    function setAudio(file) {
+        source.src =  mediaURL + "temp_audio/" + file;
+        audio.style.display = "block";
+        audio.load();
+    }
+
+    if (filename) {
+        setAudio(filename);
+    } else {
+        isLoading = true;
+        fetch("{% url 'audio_support:speak_passage' %}?passage_id={{ passage.id }}")
+            .then(res => res.json())
+            .then(data => {
+                if (!data || !data.filename) {
+                    alert("音声ファイルの生成に失敗しました。ページを再読み込みしてください。");
+                    return;
+                }
+
+                filename = data.filename;
+                setAudio(filename);
+            })
+            .catch(err => {
+                reportErrorToDev("音声生成失敗:", err);
+                alert("音声再生に失敗しました。ページを再読み込みしてください。");
+            })
+            .finally(() => {
+                isLoading = false;
+            });
+    }
+
+    // ページ離脱時のファイル削除（共通仕様）
+    window.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "hidden" || !filename) return;
+        const data = new FormData();
+        data.append("filenames", filename);
+        navigator.sendBeacon("{% url 'audio_support:delete_temp_audio_post_batch' %}", data);
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% load dict_extras %}
+{% load url_extras %}
+
+
+{% block title %}教材一覧{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% include "text_scheduler/breadcrumbs.html" %}
+        <li class="breadcrumb-item active" aria-current="page">教材管理一覧</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1>管理教材一覧</h1>
+
+{# student_id は必須、classroom_id はあるときだけクエリで付加 #}
+{% url 'text_scheduler:material_create' student_id=student_id as base %}
+{% if classroom_id %}
+    <a href="{% url_with_query base classroom_id=classroom_id %}" class="btn btn-primary btn-sm mb-2">教材新規作成</a>
+{% else %}
+    <a href="{{ base }}" class="btn btn-primary btn-sm mb-2">教材新規作成</a>
+{% endif %}
+
+<table class="table table-striped align-middle">
+    <thead>
+        <tr>
+        <th>教材名</th>
+        <th>開始日時</th>
+        <th>終了予定日時</th>
+        <th>進捗</th>
+        <th>編集</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for material in materials %}
+        {# ▼ ここで prog を束縛してから使う #}
+        {% with prog=material_progress|get_item:material.id %}
+        <tr>
+            <td>{{ material.title }}</td>
+            <td>
+            {% if material.start_date %}{{ material.start_date|date:"Y-m-d" }}{% else %}—{% endif %}
+            </td>
+            <td>
+            {% if material.goal_date %}{{ material.goal_date|date:"Y-m-d" }}{% else %}—{% endif %}
+            </td>
+            <td>
+            {% if prog %}
+                {# 新: 進捗（毎日伸びる数字） #}
+                <div class="small fw-bold">学習進捗 {{ prog.progress_rate }}%</div>
+                <div class="small text-muted">{{ prog.progress_num }} / {{ prog.progress_den }}</div>
+
+                {# 既存: 完了率（所定の復習回数を終えた数） #}
+                <div class="small mt-1 fw-bold">ユニット完了率 {{ prog.rate }}%</div>
+                <div class="small text-muted">{{ prog.completed }} / {{ prog.total }}</div>
+            {% else %}—{% endif %}
+            </td>
+            <td>
+            {% url 'text_scheduler:material_edit' material.pk as base %}
+            {% if classroom_id %}
+                <a href="{% url_with_query base student_id=student_id classroom_id=classroom_id %}" class="btn btn-sm btn-info">詳細を見る</a>
+            {% else %}
+                <a href="{% url_with_query base student_id=student_id %}" class="btn btn-sm btn-info">詳細を見る</a>
+            {% endif %}
+            </td>
+        </tr>
+
+        {# ★ “本日やるべき内容” （教材行の直後に1行） #}
+        {% with plan=material_plans|get_item:material.id %}
+            <tr class="table-light">
+            <td colspan="5" class="py-2">
+                {% if plan %}
+                <div class="small">
+                    <strong>本日やるべき内容：</strong>
+                    新規 {{ plan.new_count }} 件
+                    {% if plan.review_numbers and plan.review_numbers|length > 0 %}
+                    ／ 復習 {{ plan.review_numbers|length }} 件
+                    （{{ material.unit_label }}: {{ plan.review_numbers|join:", " }}）
+                    {% else %}
+                    ／ 復習 0 件
+                    {% endif %}
+                    ／ 見積 {{ plan.estimated_total_minutes }} 分
+                </div>
+
+                {% if plan.review_numbers and plan.review_numbers|length > 0 %}
+                    <div class="mt-1">
+                    {% url 'text_scheduler:studylog_create' student_id=student_id material_id=material.id as base_log %}
+                    {% for n in plan.review_numbers %}
+                        {% if classroom_id %}
+                            <a class="badge rounded-pill text-bg-secondary text-decoration-none me-1" href="{% url_with_query base_log student_id=student_id classroom_id=classroom_id number=n kind='review' %}">
+                        {% else %}
+                            <a class="badge rounded-pill text-bg-secondary text-decoration-none me-1" href="{% url_with_query base_log student_id=student_id number=n kind='review' %}">
+                        {% endif %}
+                        {{ material.unit_label }}{{ n }}
+                        </a>
+                    {% endfor %}
+                    </div>
+                {% endif %}
+                {% else %}
+                <div class="text-muted small">本日のプランは未生成です。</div>
+                {% endif %}
+            </td>
+            </tr>
+
+            <tr>
+            <td colspan="5" class="py-2">
+                {% url 'text_scheduler:studylog_create' student_id=student_id material_id=material.id as base %}
+                {% if plan and plan.review_numbers %}
+                    {% if classroom_id %}
+                        <a class="btn btn-outline-primary btn-sm" href="{% url_with_query base student_id=student_id classroom_id=classroom_id number=plan.review_numbers.0 kind='review' %}">
+                            成果を報告する
+                        </a>
+                    {% else %}
+                        <a class="btn btn-outline-primary btn-sm" href="{% url_with_query base student_id=student_id number=plan.review_numbers.0 kind='review' %}">
+                            成果を報告する
+                        </a>
+                    {% endif %}
+                {% else %}
+                    {% if classroom_id %}
+                        <a class="btn btn-outline-primary btn-sm" href="{% url_with_query base student_id=student_id classroom_id=classroom_id %}">
+                            成果を報告する
+                        </a>
+                    {% else %}
+                        <a class="btn btn-outline-primary btn-sm" href="{% url_with_query base student_id=student_id %}">
+                            成果を報告する
+                        </a>
+                    {% endif %}
+                {% endif %}
+            </td>
+            </tr>
+        {% endwith %} {# /plan #}
+        {% endwith %} {# /prog #}
+
+        {% empty %}
+        <tr>
+            <td colspan="5" class="text-muted">表示できる教材がありません。</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

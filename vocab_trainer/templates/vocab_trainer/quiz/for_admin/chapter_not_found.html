@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="text-danger">出題エラー</h2>
+    <p>選択された教科書のチャプターが見つかりませんでした。</p>
+    <p>出題ページで再度選択いただくか、管理者までご連絡ください。</p>
+
+    <a href="{% url 'organization_admin:student_detail' student_id %}?classroom_id={{ classroom_id }}" class="btn btn-sm btn-info">生徒詳細を見る</a>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}ラインチャンネルアクセストークン変更{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'line_channels:list' %}">チャンネル一覧</a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{% url 'line_channels:detail' channel.id %}">チャンネル詳細</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">ラインチャンネルアクセストークン変更</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<div class="container mt-4">
+    <p>ラインチャンネルアクセストークンを変更しますか?</p>
+    <p>前回の変更日時:
+    {% if last_update %}
+        {{ last_update|date:"Y-m-d H:i" }}
+    {% else %}
+        なし
+    {% endif %}
+    </p>
+    <form method="post" action="{% url 'line_channels:rotate_channel_access_token' channel.id %}">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+        {{ form.non_field_errors }}
+        </div>
+    {% endif %}
+
+    <div class="mb-2">
+        {{ form.new_channel_access_token.errors }}
+        {{ form.new_channel_access_token }}
+    </div>
+
+    <div class="mb-2">
+        {{ form.new_channel_access_token_confirm.errors }}
+        {{ form.new_channel_access_token_confirm }}
+    </div>
+
+    <button type="submit" class="btn btn-success" id="rotateBtn">チャンネルアクセストークン変更</button>
+    </form>
+</div>
+
+<a href="{% url 'line_channels:detail' channel.id %}" class="btn btn-secondary mt-2">戻る</a>
+{% endblock %}
+
+{% block script %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('rotateBtn');
+            if (!btn) return;
+            const form = btn.closest('form');
+            if (!form) return;
+            form.addEventListener('submit', () => { btn.disabled = true; });
+        });
+    </script>
+{% endblock %}

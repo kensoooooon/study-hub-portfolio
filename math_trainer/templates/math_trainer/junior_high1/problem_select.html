@@ -1,0 +1,225 @@
+{% extends 'math_trainer/common/base.html' %} 
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% include "math_trainer/common/breadcrumbs.html" %}
+        {% if classroom_id and student_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:index' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">計算練習一覧</a>
+            </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">中学1年生の計算練習一覧</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% load static %}
+
+{% block script %}
+<script src="{% static 'math_trainer/js/common/refresh.js' %}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('problem-select-form'); // 既存のフォームID
+    // ここで「検証するグループ」を宣言（Pythonのキーワード引数っぽく渡す）
+    const groupConfigs = [
+        { name: 'problem_type',  alert: '#problemTypeAlert'  },
+        { name: 'number_to_use', alert: '#numberToUseAlert' },
+    ];
+
+    // グループを初期化して要素・アラートDOMを紐づけ
+    const groups = groupConfigs.map(({name, alert}) => {
+        const elems = Array.from(form.querySelectorAll(`input[name="${name}"]`));
+        const alertEl = document.querySelector(alert);
+        return { name, elems, alertEl };
+    });
+
+    // アラート表示/非表示
+    function showAlert(alertEl, show){
+        if (!alertEl) return;
+        alertEl.classList.toggle('d-none', !show);
+        if (show) alertEl.focus();
+    }
+
+    // 単一グループの検証
+    function validateGroup(group){
+        // 対象の入力群が無いページではスキップ
+        if (!group.elems.length) return true;
+        const ok = group.elems.some(el => el.checked);
+        showAlert(group.alertEl, !ok);
+        return ok;
+    }
+
+    // 送信時に全グループを検証（どれか一つでもNGなら送信しない）
+    form.addEventListener('submit', (e) => {
+        let firstBad = null;
+        for (const g of groups){
+        const ok = validateGroup(g);
+        if (!ok && !firstBad) firstBad = g;
+        }
+        if (firstBad){
+        e.preventDefault();
+        // 最初のNGグループへ視線誘導（アラートにフォーカス済み）
+        }
+    });
+
+    // 変更があれば当該グループだけ再検証（アラートを自動で隠す）
+    for (const g of groups){
+        g.elems.forEach(el => el.addEventListener('change', () => validateGroup(g)));
+    }
+
+    // 既存の「全部のせ/全部はずし」を汎用化（nameで対象グループを指定）
+    window.checkAllStatus = (name) => {
+        const g = groups.find(x => x.name === name);
+        if (!g) return;
+        g.elems.forEach(el => { if (el.type === 'checkbox') el.checked = true; });
+        validateGroup(g);
+    };
+    window.uncheckAllStatus = (name) => {
+        const g = groups.find(x => x.name === name);
+        if (!g) return;
+        g.elems.forEach(el => { if (el.type === 'checkbox') el.checked = false; });
+        validateGroup(g);
+    };
+    });
+</script>
+{% endblock %}
+
+<!-- 親側のメッセージブロックを潰す -->
+{% block messages %}{% endblock %}
+
+{% block content %}
+<form id="problem-select-form" method="post" action="?" class="border-bottom border-end" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="student_id" value="{{ student_id }}">
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+
+    {% if messages %}
+        <div id="flash-messages" aria-live="polite" aria-atomic="true">
+            {% for message in messages %}
+                <div
+                    class="alert
+                    {% if 'error' in message.tags %}alert-danger
+                    {% elif 'warning' in message.tags %}alert-warning
+                    {% elif 'success' in message.tags %}alert-success
+                    {% else %}alert-info{% endif %}"
+                    role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+            
+    <fieldset>
+        <legend>📒 特定の形を持つ1次方程式</legend>
+        <input type="hidden" name="problem_category" value="specific_linear_equation">
+        <small class="text-muted">形と解</small>
+        <div id="problemTypeAlert" class="alert alert-warning d-none" role="alert" tabindex="-1" aria-live="polite">
+            ※最低1つの問題タイプを選択してください。
+        </div>
+        <div class="form-group">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="ax_equal_b_only_integer" name="problem_type" id="ax_equal_b_only_integer" checked>
+                <label class="form-check-label" for="ax_equal_b_only_integer">
+                    ax=b(整数解のみ)
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="ax_equal_b_all_number" name="problem_type" id="ax_equal_b_all_number">
+                <label class="form-check-label" for="ax_equal_b_all_number">
+                    ax=b(小数,分数解もふくむ)
+                </label>
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="ax_plus_b_equal_c_only_integer" name="problem_type" id="ax_plus_b_equal_c_only_integer">
+                <label class="form-check-label" for="ax_plus_b_equal_c_only_integer">
+                    ax+b=c(整数解のみ)
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="ax_plus_b_equal_c_all_number" name="problem_type" id="ax_plus_b_equal_c_all_number">
+                <label class="form-check-label" for="ax_plus_b_equal_c_all_number">
+                    ax+b=c(小数,分数解もふくむ)
+                </label>
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="ax_plus_b_equal_cx_plus_d_only_integer" name="problem_type" id="ax_plus_b_equal_cx_plus_d_only_integer">
+                <label class="form-check-label" for="ax_plus_b_equal_cx_plus_d_only_integer">
+                    ax+b=cx+d(整数解のみ)
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="ax_plus_b_equal_cx_plus_d_all_number" name="problem_type" id="ax_plus_b_equal_cx_plus_d_all_number">
+                <label class="form-check-label" for="ax_plus_b_equal_cx_plus_d_all_number">
+                    ax+b=cx+d(小数,分数解もふくむ)
+                </label>
+            </div>
+            <input class="btn btn-outline-primary" type="button" onclick="checkAllStatus('problem_type')" value="全部のせ">
+            <input class="btn btn-outline-primary" type="button" onclick="uncheckAllStatus('problem_type')" value="全部はずし">
+        </div>
+        <small class="text-muted">優先的に使用する係数</small>
+        <div id="numberToUseAlert" class="alert alert-warning d-none" role="alert" tabindex="-1" aria-live="polite">
+            ※最低1つの使用する係数を選択してください。
+        </div>
+        <div class="form-group">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="integer" name="number_to_use" id="specificLinearEquationIntegerCheck" checked>
+                <label class="form-check-label" for="specificLinearEquationIntegerCheck">
+                    整数
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="decimal" name="number_to_use" id="specificLinearEquationDecimalCheck">
+                <label class="form-check-label" for="specificLinearEquationDecimalCheck">
+                    小数
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="frac" name="number_to_use" id="specificLinearEquationFracCheck">
+                <label class="form-check-label" for="specificLinearEquationFracCheck">
+                    分数
+                </label>
+            </div>
+        </div>
+        <small class="text-muted">枚数</small>
+        <div class="form-group">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="1" name="paper_number" id="specificLinearEquationOnePaperRadio" checked>
+                <label class="form-check-label" for="specificLinearEquationOnePaperRadio">
+                    10問×1枚
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="2" name="paper_number" id="specificLinearEquationTwoPaperRadio" checked>
+                <label class="form-check-label" for="specificLinearEquationTwoPaperRadio">
+                    10問×2枚
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="5" name="paper_number" id="specificLinearEquationFivePaperRadio" checked>
+                <label class="form-check-label" for="specificLinearEquationFivePaperRadio">
+                    10問×5枚
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="10" name="paper_number" id="specificLinearEquationTenPaperRadio">
+                <label class="form-check-label" for="specificLinearEquationTenPaperRadio">
+                    10問×10枚
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="15" name="paper_number" id="specificLinearEquationFifteenPaperRadio">
+                <label class="form-check-label" for="specificLinearEquationFifteenPaperRadio">
+                    10問×15枚
+                </label>
+            </div>
+        </div>
+        <input class="btn btn-primary" type="submit" value="A4印刷用ページ表示" formaction="{% url 'math_trainer:junior_high1:dispatcher_print' %}"> 
+        <input class="btn btn-primary" type="submit" value="そのまま解く(6問)" formaction="{% url 'math_trainer:junior_high1:dispatcher_display' %}">
+    </fieldset>
+</form>
+{% endblock %}

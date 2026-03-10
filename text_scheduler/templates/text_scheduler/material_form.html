@@ -1,0 +1,281 @@
+{# templates/text_scheduler/material_form.html #}
+{% extends "base.html" %}
+{% load i18n %}
+{% load url_extras %}
+
+
+{% block title %}{% if object %}教材の編集{% else %}教材の新規作成{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    {% include "text_scheduler/breadcrumbs.html" %}
+    <li class="breadcrumb-item">
+      {% url 'text_scheduler:material_list' as base %}
+        {% if classroom_id %}
+          <a href="{% url_with_query base student_id=student_id classroom_id=classroom_id %}">教材一覧</a>
+        {% else %}
+          <a href="{% url_with_query base student_id=student_id %}">教材一覧</a>
+        {% endif %}
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">
+      {% if object %}教材の編集{% else %}教材新規作成{% endif %}
+    </li>
+  </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-3">
+  <h1 class="mb-3">{% if object %}教材の編集{% else %}教材の新規作成{% endif %}</h1>
+
+  {# 全体の非フィールドエラー #}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+      {{ form.non_field_errors }}
+    </div>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    <div class="mb-3">
+      <label for="{{ form.title.id_for_label }}" class="form-label">{{ form.title.label }}</label>
+      {{ form.title }}
+      {% if form.title.help_text %}<div class="form-text">{{ form.title.help_text }}</div>{% endif %}
+      {% for e in form.title.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label for="{{ form.unit_label.id_for_label }}" class="form-label">{{ form.unit_label.label }}</label>
+        {{ form.unit_label }}
+        {% for e in form.unit_label.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">{{ form.start_number.label }}</label>
+        {{ form.start_number }}
+        {% for e in form.start_number.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">{{ form.end_number.label }}</label>
+        {{ form.end_number }}
+        {% for e in form.end_number.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+      <div class="col-md-4">
+        <label class="form-label">{{ form.required_reviews.label }}</label>
+        {{ form.required_reviews }}
+        {% for e in form.required_reviews.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">{{ form.estimated_minutes_per_unit.label }}</label>
+        {{ form.estimated_minutes_per_unit }}
+        {% for e in form.estimated_minutes_per_unit.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">{{ form.daily_minutes_budget.label }}</label>
+        {{ form.daily_minutes_budget }}
+        {% for e in form.daily_minutes_budget.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="col-md-4 form-check mt-4">
+        {{ form.is_archived }}
+        <label class="form-check-label" for="{{ form.is_archived.id_for_label }}">{{ form.is_archived.label }}</label>
+        {% for e in form.is_archived.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+      <div class="col-md-6">
+        <label class="form-label">{{ form.start_date.label }}</label>
+        {{ form.start_date }}
+        {% for e in form.start_date.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ form.goal_date.label }}</label>
+        {{ form.goal_date }}
+        {% for e in form.goal_date.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <label class="form-label">{{ form.buffer_weekdays.label }}</label>
+      {{ form.buffer_weekdays }}
+      {% if form.buffer_weekdays.help_text %}<div class="form-text">{{ form.buffer_weekdays.help_text }}</div>{% endif %}
+      {% for e in form.buffer_weekdays.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+
+    {# 想定されるプランの表示エリア #}
+    <div id="plan-diagnosis" class="alert mt-3" hidden></div>
+    <div id="plan-calendar" class="mt-2"></div>
+
+    {# 保存ボタンの行を少し拡張 #}
+    <div class="mt-4 d-flex gap-2">
+      <button type="submit" class="btn btn-primary">保存する</button>
+
+      {# 編集時のみ“削除”を表示（Create時は object が None） #}
+      {% if object %}
+        {% url 'text_scheduler:material_delete' object.pk as del_base %}
+          {% if classroom_id %}
+            <a class="btn btn-outline-danger" href="{% url_with_query del_base student_id=student_id classroom_id=classroom_id %}" role="button">
+          {% else %}
+            <a class="btn btn-outline-danger" href="{% url_with_query del_base student_id=student_id %}" role="button">
+          {%endif %}
+          削除…
+        </a>
+      {% endif %}
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+      {% url 'text_scheduler:material_list' as base %}
+      {% if classroom_id %}
+        <a href="{% url_with_query base student_id=student_id classroom_id=classroom_id %}">教材一覧へ戻る</a>
+      {% else %}
+        <a href="{% url_with_query base student_id=student_id %}">教材一覧へ戻る</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const $ = (s) => document.querySelector(s);
+  const fields = ["#id_start_date", "#id_goal_date", "#id_start_number", "#id_end_number",
+                  "#id_estimated_minutes_per_unit", "#id_daily_minutes_budget"].map($);
+  const box = $("#plan-diagnosis");
+  const cal = $("#plan-calendar");
+  let t;
+
+  function debounceUpdate() {
+    clearTimeout(t);
+    t = setTimeout(update, 300);
+  }
+  fields.forEach(el => {
+    if (!el) return;
+    el.addEventListener("input", debounceUpdate);
+    el.addEventListener("change", debounceUpdate);
+  });
+
+  async function update() {
+    // 必須がそろっていなければ描画クリア＋非表示
+    const need = [fields[0], fields[1], fields[2], fields[3]];
+    if (need.some(el => !val(el))) {
+      box.hidden = true;
+      cal.innerHTML = "";
+      return;
+    }
+    try {
+      const params = new URLSearchParams({
+        start: val(fields[0]), goal: val(fields[1]),
+        u1: val(fields[2]),    u2: val(fields[3]),
+        unit: val(fields[4]),  budget: val(fields[5]),
+        reviews: document.querySelector("#id_required_reviews")?.value ?? "",
+      });
+     // 予備日: チェックボックス or セレクトの選択値を buffers=5&buffers=6... の形で付与
+      document
+        .querySelectorAll('[name="buffer_weekdays"]:checked, #id_buffer_weekdays option:checked')
+        .forEach(opt => params.append("buffers", opt.value));
+      // 詳細表示を要求
+      params.set("detailed", "1");
+      const res = await fetch(`/text_scheduler/materials/plan_preview/?${params}`);
+      if (!res.ok) throw new Error("preview failed");
+      const j = await res.json();
+      renderMessage(j);
+      renderCalendar(j.timeline || j.schedule);
+    } catch (e) {
+      box.hidden = false;
+      box.className = "alert alert-danger mt-3";
+      box.textContent = "プレビュー取得に失敗しました。入力を確認してください。";
+      cal.innerHTML = "";
+    }
+  }
+
+function renderMessage(j) {
+  const {
+    status, req_new_per_day, cap_new_per_day, delay_days,
+    first_deadline, rounds,
+    deadline_past, slip_days, projected_finish_date
+  } = j;
+  window.__last_rounds = rounds;
+  box.hidden = false;
+  const map = {ok:"alert-success", tight:"alert-warning", impossible:"alert-danger"};
+  box.className = `alert mt-3 ${map[status]||"alert-info"}`;
+
+  let msg = "";
+
+  if (!deadline_past && first_deadline) {
+    // 通常ケース（締切が妥当）
+    msg += `初回学習の締切: ${first_deadline}\n`;
+    if (status === "tight") msg += "この計画では目標日に間に合わない可能性があります。\n";
+    if (status === "impossible") msg += "現在の設定では実現不可能です。\n";
+    if (delay_days) {
+      const d = new Date(val(fields[1])); // goal
+      if (!isNaN(d)) {
+        d.setDate(d.getDate() + Number(delay_days));
+        const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
+        msg += `遅延見込み: 約${delay_days}日 → 目安: ${y}-${m}-${day} 完了\n`;
+      } else {
+        msg += `遅延見込み: 約${delay_days}日\n`;
+      }
+    }
+  } else if (deadline_past) {
+    // 遡り締切の場合（開始日より前にはしない）
+    if (typeof slip_days === "number" && projected_finish_date) {
+      msg += `目標日に間に合いません。\n遅延見込み: 約${slip_days}日 → 目安: ${projected_finish_date} 完了\n`;
+    } else {
+      msg += `目標日に間に合いません。\n`;
+    }
+    msg += `対処案: 復習回数の削減／目標日の延長／1日上限の引き上げ（時間配分）`;
+  } else {
+    msg += "設定内容を確認してください。";
+  }
+
+  // 改行を反映（textContentではなくinnerTextを利用）
+  box.innerText = msg;
+}
+
+  function renderCalendar(scheduleOrNull) {
+    const s = scheduleOrNull || [];
+    const rounds = window.__last_rounds ?? Number(document.querySelector("#id_required_reviews")?.value || 0);
+    if (!s.length || rounds <= 0) { 
+      // fallback（従来の簡易表）
+      if (!s.length) { cal.innerHTML = ""; return; }
+      let html = `<table class="table table-sm"><thead><tr><th>日付</th><th>新規</th></tr></thead><tbody>`;
+      html += s.map(d => `<tr><td>${d.date}</td><td>${d.new}</td></tr>`).join("");
+      html += `</tbody></table>`;
+      cal.innerHTML = html;
+      return;
+    }
+    // 詳細版（New + R1..Rn + RevTotal）
+    let ths = `<th>日付</th><th>新規件数</th>`;
+    for (let i=1;i<=rounds;i++) ths += `<th>${i}回目の復習件数</th>`;
+    ths += `<th>合計復習件数</th>`;
+    let rows = s.map(row => {
+      const newCellCls = (row.overrun_new && row.new>0) ? "table-danger" : "";
+      const revCellCls = (row.overrun_review && row.review_total>0) ? "table-danger" : "";
+      let tds = `<td>${row.date}</td><td class="${newCellCls}">${row.new}</td>`;
+      for (let i=1;i<=rounds;i++) {
+        tds += `<td>${row[`r${i}`] ?? 0}</td>`;
+      }
+      tds += `<td class="${revCellCls}">${row.review_total}</td>`;
+      return `<tr>${tds}</tr>`;
+    }).join("");
+    cal.innerHTML = `<table class="table table-sm">
+      <thead><tr>${ths}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="form-text">赤いセル=新規: 初回締切超過 / 合計復習件数: 目標日超過の復習が含まれる</div>`;
+  }
+
+  function val(el){ return el && typeof el.value !== "undefined" ? el.value : ""; }
+
+
+  // 初期描画
+  update();
+});
+</script>
+{% endblock %}

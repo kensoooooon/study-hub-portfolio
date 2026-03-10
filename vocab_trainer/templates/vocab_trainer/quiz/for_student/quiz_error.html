@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="text-danger">エラー</h2>
+    <p>正しく出題・採点が出来ませんでした。</p>
+
+    <form method="post" action="{% url 'vocab_trainer:quiz_type_select_for_student' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary mt-3">クイズ選択画面に戻る</button>
+    </form>
+</div>
+{% endblock %}

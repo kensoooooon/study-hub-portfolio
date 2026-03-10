@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}教室削除{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'organization_admin:classroom_detail' classroom.pk %}">{{ classroom.name }}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">教室削除</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>教室削除</h1>
+    <p>本当に <strong>{{ classroom.name }}</strong> を削除しますか？</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">削除</button>
+        <a href="{% url 'organization_admin:classroom_detail' classroom.pk %}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}

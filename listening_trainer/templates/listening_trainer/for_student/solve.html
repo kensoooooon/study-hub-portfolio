@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'student:home' %}">ホーム</a>
+        </li>
+        <li class="breadcrumb-item">
+            {% if is_eiken %}
+                <form method="post" action="{% url 'listening_trainer:eiken_quiz_type_select_for_student' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link p-0 m-0 align-baseline">英検用リスニングクイズ選択</button>
+                </form>
+            {% else %}
+                <form method="post" action="{% url 'listening_trainer:quiz_type_select_for_student' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link p-0 m-0 align-baseline">教科書用リスニングクイズ選択</button>
+                </form>
+            {% endif %}
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">リスニング読解</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<h2>リスニングクイズ</h2>
+
+<button id="play-audio-btn" class="btn btn-outline-primary mb-3">▶ 再生</button>
+
+<!--生成済みを管理する簡易フラグ-->
+<input type="hidden" id="is-audio-generated" value="false">
+
+<!-- ✅ 非表示のテキスト -->
+{% if passage.content %}
+    <div class="mt-3">
+        <button id="show-passage-btn" class="btn btn-secondary mb-2">
+            ▶ 本文を表示
+        </button>
+        <div id="full-text" style="display: none;">{{ passage.content|linebreaksbr }}</div>
+    </div>
+{% endif %}
+
+<form method="post" action="" data-disable-on-submit="true">
+    {% csrf_token %}
+    {% for question in questions %}
+        <div class="mt-5">
+            <h4>Q{{ forloop.counter }}: {{ question.question_text }}</h4>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="question_{{ question.id }}" value="A" id="Q{{ forloop.counter }}_A" required>
+                <label class="form-check-label" for="Q{{ forloop.counter }}_A">{{ question.option_a }}</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="question_{{ question.id }}" value="B" id="Q{{ forloop.counter }}_B" required>
+                <label class="form-check-label" for="Q{{ forloop.counter }}_B">{{ question.option_b }}</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="question_{{ question.id }}" value="C" id="Q{{ forloop.counter }}_C" required>
+                <label class="form-check-label" for="Q{{ forloop.counter }}_C">{{ question.option_c }}</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="question_{{ question.id }}" value="D" id="Q{{ forloop.counter }}_D" required>
+                <label class="form-check-label" for="Q{{ forloop.counter }}_D">{{ question.option_d }}</label>
+            </div>
+        </div>
+    {% endfor %}
+    <input type="hidden" name="batch_id" value="{{ batch_id }}">
+    <input type="hidden" name="is_eiken" value="{{ is_eiken|yesno:'1,0' }}">
+    <input type="hidden" name="audio_file_names" id="audio-file-names">
+    <input type="hidden" id="finished_listening" value="false">
+    <button type="submit" class="btn btn-primary mt-4" id="submit-button" data-loading-text="採点中..." disabled>回答を送信する</button>
+</form>
+
+<hr>
+
+<div class="d-flex justify-content-between mt-5">
+    {% if is_eiken %}
+        <a href="{% url 'listening_trainer:eiken_quiz_type_select_for_student' %}">英検用リスニングクイズ選択</a>
+    {% else %}
+        <a href="{% url 'listening_trainer:quiz_type_select_for_student' %}">教科書用リスニングクイズ選択</a>
+    {% endif %}
+</div>
+{% endblock %}
+
+
+{% block script %}
+<script>
+    const passageId = "{{ passage.id }}";
+    const isAudioGenerated = document.getElementById("is-audio-generated");
+    const audioFileNames = document.getElementById("audio-file-names");
+    const playButton = document.getElementById("play-audio-btn");
+    const audio = new Audio();
+    const mediaURL = "{{ MEDIA_URL }}";
+
+
+    let urls = [];
+    let filenames = [];
+
+    async function generateAudioIfNeeded() {
+        if (isAudioGenerated.value === "true") {
+            // すでに生成済み → audioFileNames から復元
+            filenames = audioFileNames.value.split(',').filter(name => name);
+            urls = filenames.map(name => mediaURL + "temp_audio/" + name);
+            return;
+        }
+
+        try {
+            const res = await fetch("{% url 'audio_support:speak_dialogue' %}?passage_id=" + passageId);
+            const data = await res.json();
+            if (!Array.isArray(data) || !data.length) {
+                alert("音声の取得に失敗しました。もう一度再生を試してください。");
+                return;
+            }
+
+            filenames = data.map(item => item.filename);
+            urls = data.map(item => item.url);
+
+            audioFileNames.value = filenames.join(",");
+            isAudioGenerated.value = "true";
+        } catch (err) {
+            reportErrorToDev("音声生成に失敗しました:", err);
+        }
+    }
+
+    playButton.addEventListener("click", async () => {
+        if (playButton.disabled) return;
+
+        // クリック直後にボタン無効化（即応）
+        playButton.disabled = true;
+
+        await generateAudioIfNeeded();
+        if (!urls.length) {
+            alert("音声ファイルが見つかりませんでした。");
+            playButton.disabled = false; // リトライできるように戻す
+            return;
+        }
+
+        let i = 0;
+        function playNext() {
+            if (i < urls.length) {
+                audio.src = urls[i++];
+                audio.play();
+                audio.onended = playNext;
+            } else {
+                // 再生が完了したらsubmitボタンを有効にする
+                document.getElementById("finished_listening").value = "true";
+                document.getElementById("submit-button").disabled = false;
+                playButton.disabled = false;
+            }
+        }
+        playNext();
+    });
+</script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const btn = document.getElementById("show-passage-btn");
+        const text = document.getElementById("full-text");
+        if (btn && text) {
+            btn.addEventListener("click", () => {
+                text.style.display = "block";
+                btn.style.display = "none";
+            });
+        }
+    });
+</script>
+{% endblock %}
+

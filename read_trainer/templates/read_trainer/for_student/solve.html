@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'student:home' %}">ホーム</a>
+        </li>
+        <li class="breadcrumb-item">
+            {% if is_eiken %}
+                <form method="post" action="{% url 'read_trainer:eiken_quiz_type_select_for_student' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link p-0 m-0 align-baseline">英検クイズ選択</button>
+                </form>
+            {% else %}
+                <form method="post" action="{% url 'read_trainer:quiz_type_select_for_student' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link p-0 m-0 align-baseline">長文クイズ選択</button>
+                </form>
+            {% endif %}
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">長文読解</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<h2>長文読解</h2>
+
+{% if passage.title %}
+    <h4 class="text-primary mt-3">📝 タイトル: {{ passage.title }}</h4>
+{% endif %}
+
+<audio id="audio-player" controls style="display: none;">
+    <source id="audio-source" type="audio/mpeg">
+    音声を再生できませんでした。
+</audio>
+
+<p class="mt-4">{{ passage.content|linebreaks }}</p>
+
+<form method="post" action="" data-disable-on-submit="true">
+    {% csrf_token %}
+    {% for question in questions %}
+        <div class="mt-5">
+            <h4>Q{{ forloop.counter }}: {{ question.question_text }}</h4>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="question_{{ question.id }}" value="A" id="Q{{ forloop.counter }}_A" required>
+                <label class="form-check-label" for="Q{{ forloop.counter }}_A">{{ question.option_a }}</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="question_{{ question.id }}" value="B" id="Q{{ forloop.counter }}_B" required>
+                <label class="form-check-label" for="Q{{ forloop.counter }}_B">{{ question.option_b }}</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="question_{{ question.id }}" value="C" id="Q{{ forloop.counter }}_C" required>
+                <label class="form-check-label" for="Q{{ forloop.counter }}_C">{{ question.option_c }}</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="question_{{ question.id }}" value="D" id="Q{{ forloop.counter }}_D" required>
+                <label class="form-check-label" for="Q{{ forloop.counter }}_D">{{ question.option_d }}</label>
+            </div>
+        </div>
+    {% endfor %}
+    <input type="hidden" name="batch_id" value="{{ batch_id }}">
+    <input type="hidden" name="student_id" value="{{ student.id }}">
+    <input type="hidden" name="is_eiken" value="{{ is_eiken|yesno:'1,0' }}">
+    <input type="hidden" name="audio_file_names" id="audio-file-names">
+    <input type="hidden" id="finished_listening" value="false">
+    <button type="submit" class="btn btn-primary mt-4" data-loading-text="採点中...">回答を送信する</button>
+</form>
+{% endblock %}
+
+
+{% block script %}
+<script>
+    const audio = document.getElementById('audio-player');
+    const source = document.getElementById('audio-source');
+    const passageId = "{{ passage.id }}";
+    const audioFileNames = document.getElementById("audio-file-names");
+    const mediaURL = "{{ MEDIA_URL }}";
+
+    let filenames = [];
+
+    fetch("{% url 'audio_support:speak_passage' %}?passage_id=" + passageId)
+        .then(response => {
+            if (!response.ok) {
+                reportWarningToDev("音声ファイル名の取得に失敗しました。status:", response.status);
+                return null;
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.filename) {
+                const fileUrl = mediaURL + "temp_audio/" + data.filename;
+                filenames.push(data.filename); // ✅ 忘れずに記録
+                document.getElementById("audio-file-names").value = data.filename; // ✅ ここを追加
+                source.src = fileUrl;
+                audio.style.display = 'block';
+                audio.load();
+            } else {
+                reportWarningToDev("不正なレスポンス形式:", data);
+            }
+        })
+        .catch(error => {
+            reportErrorToDev("音声ファイル名取得中にエラーが発生:", error);
+        });
+</script>
+{% endblock %}

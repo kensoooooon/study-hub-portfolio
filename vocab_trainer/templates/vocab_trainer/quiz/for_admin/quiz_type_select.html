@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+            </li>
+            {% if classroom_id %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'organization_admin:classroom_detail' classroom_id %}">教室詳細</a>
+                </li>
+            {% endif %}
+        {% elif user.role == 'teacher' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:teacher_dashboard' %}">担当生徒一覧</a>
+            </li>
+        {% endif %}
+        {% if classroom_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:student_detail' student.id %}?classroom_id={{ classroom_id }}">生徒詳細</a>
+            </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">クイズ選択</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h2>{{ student.username }} さんのクイズの種類を選択</h2>
+
+{% if student.textbook %}
+    <h4>使用教科書: {{ textbook_name }}</h4>
+{% else %}
+    <div class="alert alert-warning small">
+        ※ 教科書が未登録のため、クイズは利用できません。生徒詳細から教科書情報を登録して下さい。
+    </div>
+{% endif %}
+
+{% if error_message %}
+<div class="alert alert-danger mt-3">{{ error_message }}</div>
+{% endif %}
+
+<form id="quiz-all-form" method="post" action="{% url 'vocab_trainer:quiz_all_with_admin' %}" class="mb-3">
+    {% csrf_token %}
+    <input type="hidden" name="target_student_id" value="{{ student.id }}">
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    <button type="submit" class="btn btn-primary" {% if not student.textbook %} disabled {% endif %}>教科書全体から出題</button>
+</form>
+
+<form id="quiz-form" method="post" action="{% url 'vocab_trainer:quiz_chapter_with_admin' %}" onsubmit="return validateChapterSelection();">
+    {% csrf_token %}
+    <input type="hidden" name="target_student_id" value="{{ student.id }}">
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    <h4>特定のチャプターから出題</h4>
+    <div class="form-group" id="chapter-selection">
+    {% for group_key, items in grouped_chapter_progress.items %}
+    <div class="chapter-group border-bottom border-primary border-3">
+        {% if items|length > 1 %}
+            <h5 class="mt-3">{{ group_key }}</h5>
+        {% endif %}
+        {% for item in items %}
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="chapter_ids" value="{{ item.chapter.id }}" id="chapter_{{ item.chapter.id }}" {% if item.progress.total == 0 %} disabled {% endif %}>
+            <label class="form-check-label" for="chapter_{{ item.chapter.id }}">
+            <span>{{ item.chapter.title }}</span>
+            <span class="text-muted small">{{ item.progress.percentage }}%</span>
+            {% if item.progress.total == 0 %}<span class="text-muted">(単語未登録)</span>{% endif %}
+            </label>
+
+            {% if item.progress.total > 0 %}
+            <div class="progress mt-1" style="height: 1rem;">
+                {% with item.progress.retention_ratio as r %}
+                    {% if r %}
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ r.stable }}%;" title="記憶安定 (青)"></div>
+                        <div class="progress-bar bg-warning text-dark" role="progressbar" style="width: {{ r.warning }}%;" title="やや注意 (黄)"></div>
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: {{ r.danger }}%;" title="要復習 (赤)"></div>
+                    {% else %}
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ item.progress.percentage }}%;"></div>
+                    {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-primary" {% if not student.textbook %} disabled {% endif %}>特定のチャプターから出題</button>
+    <div id="chapter-error-message" class="text-danger mt-2" style="display:none;">
+        ※ 少なくとも1つのチャプターを選択してください。
+    </div>
+</form>
+
+<form method="post" action="{% url 'vocab_trainer:quiz_review_with_admin' %}" class="mt-3">
+    {% csrf_token %}
+    <input type="hidden" name="target_student_id" value="{{ student.id }}">
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    
+    <button type="submit"
+        class="btn 
+            {% if review_level == 'very_high' %} btn-danger
+            {% elif review_level == 'high' %} btn-warning
+            {% elif review_level == 'medium' %} btn-info
+            {% elif review_level == 'low' %} btn-primary
+            {% else %} btn-outline-secondary {% endif %}">
+
+        {% if review_level == 'very_high' %}
+            🔥 忘れかけの英単語を優先復習（超高リスク）
+        {% elif review_level == 'high' %}
+            ⚠️ 忘れそうな英単語を復習（高リスク）
+        {% elif review_level == 'medium' %}
+            ⌛️ 忘れそうな英単語を復習（中リスク）
+        {% elif review_level == 'low' %}
+            ✅ 記憶が安定していますが復習しますか？
+        {% else %}
+            💤 復習は今のところ必要ありません
+        {% endif %}
+    </button>
+</form>
+{% endblock %}
+
+{% block script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+            new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+
+        const form = document.getElementById('quiz-form');
+        const textbookExists = {{ student.textbook|yesno:"true,false" }};
+        form.addEventListener('submit', function (e) {
+            if (!textbookExists) {
+                e.preventDefault();
+                alert('教科書が未登録です。管理者に連絡してください。');
+            }
+        });
+    });
+
+    function validateChapterSelection() {
+        const checkboxes = document.querySelectorAll('input[name="chapter_ids"]:checked');
+        const errorMessage = document.getElementById('chapter-error-message');
+        if (checkboxes.length === 0) {
+            errorMessage.style.display = 'block';
+            return false;
+        } else {
+            errorMessage.style.display = 'none';
+            return true;
+        }
+    }
+</script>
+{% endblock %}

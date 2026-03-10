@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}担当生徒一覧{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">担当生徒一覧</h1>
+<div class="accordion" id="studentAccordion">
+    {% for student in students %}
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="heading{{ student.id }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ student.id }}" onclick="reloadReminders('{{ student.id }}')">
+                {{ student.username }}
+            </button>
+        </h2>
+        <div id="collapse{{ student.id }}" class="accordion-collapse collapse" data-bs-parent="#studentAccordion">
+            <div class="accordion-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>曜日</th>
+                            <th>時刻</th>
+                            <th>メッセージ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reminders-{{ student.id }}">
+                        <tr>
+                            <td colspan="2">リマインダーを読み込んでいます...</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button class="btn btn-primary mt-3" 
+                        onclick="location.href='{% url 'reminder_create' %}?student={{ student.id }}&next={{ request.get_full_path }}'">
+                    新規作成
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    function reloadReminders(studentId) {
+        const remindersContainer = document.getElementById(`reminders-${studentId}`);
+        remindersContainer.innerHTML = `<tr><td colspan="3">リマインダーを読み込んでいます...</td></tr>`;
+        
+        fetch(`/study_reminder/students/${studentId}/reminders/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('リマインダーの取得に失敗しました。');
+                }
+                return response.json();
+            })
+            .then(data => {
+                const remindersHtml = Object.entries(data.reminders).map(([day, reminders]) => `
+                    <tr>
+                        <td rowspan="${reminders.length}">${day}</td>
+                        <td>
+                            <a href="/study_reminder/manage/${reminders[0].id}/edit/">
+                                ${reminders[0].time_of_day}
+                            </a>
+                        </td>
+                        <td>${reminders[0].custom_message}</td>
+                    </tr>
+                    ${reminders.slice(1).map(reminder => `
+                    <tr>
+                        <td>
+                            <a href="/study_reminder/manage/${reminder.id}/edit/?next={{ request.get_full_path }}">
+                                ${reminder.time_of_day}
+                            </a>
+                        </td>
+                        <td>${reminder.custom_message}</td>
+                    </tr>
+                    `).join('')}
+                `).join('');
+                remindersContainer.innerHTML = remindersHtml;
+            })
+            .catch(error => {
+                remindersContainer.innerHTML = `<tr><td colspan="3">リマインダーの取得に失敗しました。</td></tr>`;
+                reportErrorToDev('Error:', error);
+            });
+    }
+</script>
+{% endblock %}

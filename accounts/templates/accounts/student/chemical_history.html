@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block title %}学習履歴{% endblock %}
+
+{% block style %}
+<style>
+    .card {
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        padding: 15px;
+        width: 100%;
+        box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+        transition: transform 0.2s;
+    }
+
+    .card:hover {
+        transform: scale(1.05);
+    }
+
+    .card h5 {
+        font-size: 1.2em;
+        color: #333;
+    }
+
+    .card p {
+        color: #666;
+    }
+
+    .loading-spinner {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student:home' %}">ホーム</a></li>
+        <li class="breadcrumb-item active" aria-current="page">化学学習履歴</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <!-- 左側: 復習クイズへのリンク -->
+        <div class="col-md-3">
+            <h2>復習クイズ</h2>
+            <a href="{% url 'chem_trainer:review_quiz' %}" class="btn btn-primary w-100 mb-3">
+                復習クイズを始める
+            </a>
+        </div>
+
+        <!-- 右側: 学習した英単語一覧 -->
+        <div class="col-md-9">
+            <h2>学習履歴</h2>
+            <div class="row">
+                {% for progress in chemical_progresses %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ progress.get_latex }}</h5>
+                                <p>正答率: {{ progress.percent_accuracy }}%</p>
+                                <p>最終学習日: {{ progress.last_answered_at|date:"Y/m/d H:i" }}</p>
+                                <p>優先度: {{ progress.review_priority|floatformat:2 }}</p>
+
+                                <!-- ✅ 確認学習ボタン -->
+                                <button class="btn btn-primary study-button"
+                                data-url="{% url 'chem_trainer:study_card' %}"
+                                data-id="{{ progress.get_relation_id }}"
+                                data-type="{{ progress.get_relation_type }}">
+                                    確認学習
+                                </button>
+
+                                <!-- ✅ ロード中の表示を追加 -->
+                                <div class="loading-spinner">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p>ロード中…しばらくお待ちください</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p>まだ学習した単語がありません。</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    document.querySelectorAll('.study-button').forEach(button => {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+
+            // ✅ ボタンからデータ取得
+            const id = button.getAttribute("data-id");
+            const type = button.getAttribute("data-type");
+
+            // ✅ URL を生成
+            const url = `/chem_trainer/study_card/${type}/${id}/`;
+
+            // ✅ 遷移
+            window.location.href = url;
+        });
+    });
+</script>
+
+{% endblock %}

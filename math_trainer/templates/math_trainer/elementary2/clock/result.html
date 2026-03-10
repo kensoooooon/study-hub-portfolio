@@ -1,0 +1,111 @@
+{% extends 'math_trainer/common/base.html' %}
+
+{% load static %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% include "math_trainer/common/breadcrumbs.html" %}
+        {% if classroom_id and student_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:index' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">計算練習一覧</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:elementary2:problem_select' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">2年生の計算練習一覧</a>
+            </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">解答ページ</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block css %}
+<style>
+    .problem-card { border: 1px solid #ddd; border-radius: .5rem; padding: 1rem; margin-bottom: 1rem; }
+    .clock-wrap { margin: .5rem 0; }
+    .choices li { list-style: none; margin: .25rem 0; }
+</style>
+{% endblock %}
+
+{% block script %}
+<script src="https://code.createjs.com/1.0.0/createjs.min.js"></script>
+<script src="{% static 'math_trainer/js/elementary2/clock_draw.js' %}"></script>
+<script>
+// ---- 描画ヘルパー（clock_draw.js に drawSingleClock / drawDoubleClock がある前提） ----
+// もし clock_draw.js に無ければ、短い実装をここに置くこともできます。
+
+function drawFromDataset(canvasEl) {
+    const drawType = canvasEl.dataset.drawType;     // "single" or "double"
+    const hours = canvasEl.dataset.hours.split(',').map(Number);
+    const minutes = canvasEl.dataset.minutes.split(',').map(Number);
+
+    const stage = new createjs.Stage(canvasEl.id);
+    if (drawType === 'double') {
+        // 左右2つの時計
+        if (typeof drawDoubleClock === 'function') {
+        drawDoubleClock(stage, hours[0], minutes[0], hours[1], minutes[1]);
+        }
+    } else {
+        // 単一の時計
+        if (typeof drawSingleClock === 'function') {
+        drawSingleClock(stage, hours[0], minutes[0]);
+        }
+    }
+    stage.update();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('canvas.clock-canvas').forEach(drawFromDataset);
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h4 class="mb-3">結果: {{ summary.correct }}/{{ summary.total }}</h4>
+
+    {% for r in results %}
+        <div class="card mb-3 p-3">
+        <div class="row">
+            <div class="col-md-6">
+            <div class="mb-2">{{ r.problem_text|linebreaksbr }}</div>
+
+            {% if r.canvas_required and r.draw %}
+                <canvas
+                id="clock_res_{{ forloop.counter }}"
+                class="clock-canvas"
+                width="640" height="320"
+                data-draw-type="{{ r.draw.type }}"
+                data-hours="{% for t in r.draw.time_information %}{{ t.hour }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                data-minutes="{% for t in r.draw.time_information %}{{ t.minute }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                </canvas>
+            {% endif %}
+            </div>
+
+            <div class="col-md-6">
+            {% if r.options %}
+                <ul class="mb-2">
+                {% for idx, text in r.options %}
+                    <li>
+                    {% if r.selected_index == idx %}
+                        <strong>あなたの選択</strong>：{{ text }}
+                        {% if r.is_correct %}<span class="text-success">（正解）</span>{% else %}<span class="text-danger">（不正解）</span>{% endif %}
+                    {% else %}
+                        {{ text }}
+                    {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            <div>正解：<strong>{{ r.answer_text }}</strong></div>
+            </div>
+        </div>
+        </div>
+    {% endfor %}
+</div>
+
+    <div class="d-flex justify-content-between mt-5">
+        <a href="{% url 'math_trainer:elementary2:problem_select' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">2年生の計算練習一覧</a>
+    </div>
+{% endblock %}

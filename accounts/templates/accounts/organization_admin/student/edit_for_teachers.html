@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}教科書編集{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'organization_admin:teacher_dashboard' %}">担当生徒一覧</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">
+            <a href="{% url 'organization_admin:student_detail' student.pk %}">生徒詳細</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">教科書編集</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1>{{ student.username }} の教科書とメールアドレスを編集</h1>
+
+<form method="post" class="mt-4">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-primary">保存</button>
+    <a href="{% url 'organization_admin:student_detail' student.pk %}" class="btn btn-secondary">キャンセル</a>
+</form>
+{% endblock %}

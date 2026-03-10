@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block title %}アクセス権限がありません{% endblock %}
+
+{% block content %}
+<div class="alert alert-danger" role="alert">
+    <h1>アクセス権限がありません</h1>
+    <p>このアカウントの権限では、ページにアクセスできません。</p>
+    <p>他のページに移動するか、管理者にお問い合わせください。</p>
+</div>
+<a href="{% url 'accounts_auth:login' %}" class="btn btn-primary">ログインページに戻る</a>
+{% endblock %}

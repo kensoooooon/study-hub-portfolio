@@ -1,0 +1,62 @@
+{% extends 'math_trainer/common/base.html' %} 
+
+{% block title %}採点結果{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% include "math_trainer/common/breadcrumbs.html" %}
+        {% if classroom_id and student_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:index' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">計算練習一覧</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:common:score' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">採点フォーム</a>
+            </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">採点結果</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+    <div class="container py-4">
+
+    {% if rows %}
+        <div class="card">
+            <div class="card-body p-0">
+                <table class="table mb-0">
+                <thead class="table-light">
+                    <tr>
+                    <th style="width:15%">セッションID</th>
+                    <th style="width:15%">正答数</th>
+                    <th style="width:15%">合計</th>
+                    <th style="width:20%">スコア</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                        <tr>
+                        <td>#{{ r.sid }}</td>
+                        <td>{{ r.correct }}</td>
+                        <td>{{ r.total }}</td>
+                        <td>
+                            {% if r.total %}
+                                {{ r.correct }} / {{ r.total }}（{{ r.score|floatformat:2 }}）
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="alert alert-warning">
+        表示できる採点結果が見つかりませんでした（セッション情報が消えた可能性があります）。
+        </div>
+    {% endif %}
+    </div>
+{% endblock %}

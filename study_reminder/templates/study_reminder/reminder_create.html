@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}リマインダー作成{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+            </li>
+            {% if classroom_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_detail' classroom_id %}">教室詳細</a>
+            </li>
+            {% endif %}
+        {% elif user.role == 'teacher' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:teacher_dashboard' %}">担当生徒一覧</a>
+            </li>
+        {% endif %}
+        {% if student_id %}
+        <li class="breadcrumb-item">
+            <a href="{% url 'organization_admin:student_detail' student_id %}?classroom_id={{ classroom_id }}">生徒詳細</a>
+        </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">リマインダー作成</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<div class="card shadow-sm p-4">
+    <h1 class="mb-4">新規リマインダー作成</h1>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <div class="mb-3">
+            {{ form.day_of_week.label_tag }}
+            {{ form.day_of_week }}
+        </div>
+        <div class="mb-3">
+            {{ form.time_of_day.label_tag }}
+            {{ form.time_of_day }}
+        </div>
+        <div class="mb-3">
+            {{ form.custom_message.label_tag }}
+            {{ form.custom_message }}
+        </div>
+        <div class="d-flex justify-content-between">
+            <button type="submit" class="btn btn-success">保存</button>
+            <a href="{{ request.GET.next }}" class="btn btn-secondary">キャンセル</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

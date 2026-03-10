@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}チャンネル詳細{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'line_channels:list' %}">チャンネル一覧</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">チャンネル詳細</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<h2>チャンネル詳細</h2>
+
+<h1>組織名: {{ channel.organization.name }}</h1>
+<p>チャンネルID: {{ channel.channel_id }}</p>
+<p>ボットユーザーID: {{ channel.bot_user_id }}</p>
+<p>作成日: {{ channel.created_at }}</p>
+<p>アップデート日: {{ channel.updated_at }}</p>
+<p>
+    {% if channel.is_active %}
+        チャンネル有効
+    {% else %}
+        チャンネル無効
+    {% endif %}
+</p>
+
+{% if channel.is_active %}
+    <a href="{% url 'line_channels:deactivate_confirm' channel.id %}"class=" btn btn-sm btn-info">チャンネルの無効化</a>
+{% else %}
+    <a href="{% url 'line_channels:activate_confirm' channel.id %}"class=" btn btn-sm btn-info">チャンネルの有効化</a>
+{% endif %}
+<a href="{% url 'line_channels:rotate_channel_secret' channel.id %}" class="btn btn-sm btn-info">ラインチャンネルシークレットの変更</a>
+<a href="{% url 'line_channels:rotate_channel_access_token' channel.id %}" class="btn btn-sm btn-info">ラインチャンネルアクセストークンの変更</a>
+
+{% endblock %}

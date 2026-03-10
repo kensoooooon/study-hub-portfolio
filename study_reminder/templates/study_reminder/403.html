@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="alert alert-danger" role="alert">
+    <h1>アクセスが拒否されました</h1>
+    <p>操作できる権限がありません。</p>
+    <ul class="list-group">
+        <li class="list-group-item"><strong>ログインユーザー:</strong> {{ user.username }}</li>
+        <li class="list-group-item"><strong>現在の権限:</strong> {{ user.get_role_display }}</li>
+        <li class="list-group-item"><strong>リマインダーID:</strong> {{ reminder_id }}</li>
+        <li class="list-group-item"><strong>必要な権限:</strong> 教室管理者、組織管理者、または担当講師</li>
+    </ul>
+    <a href="{% url 'student__list' %}" class="btn btn-primary mt-3">リマインダー一覧に戻る</a>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}アカウント情報編集{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm p-4">
+    <h1>アカウント情報編集</h1>
+    <form method="post" id="edit-form">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+            {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <div class="mb-3">
+            {{ form.email.label_tag }}
+            {{ form.email }}
+        </div>
+        <div class="mb-3">
+            {{ form.password.label_tag }}
+            {{ form.password }}
+        </div>
+        <button type="submit" class="btn btn-success">保存</button>
+        <a href="{{ homepage_url }}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}

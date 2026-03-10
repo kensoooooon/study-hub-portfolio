@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}リマインダー一覧{% endblock %}
+{% block content %}
+<h1 class="mb-4">リマインダー一覧</h1>
+<a href="{% url 'reminder_create' %}" class="btn btn-primary mb-3">新しいリマインダーを作成</a>
+<table class="table table-striped">
+    <thead class="table-dark">
+        <tr>
+            <th>生徒名</th>
+            <th>曜日</th>
+            <th>時間</th>
+            <th>メッセージ</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for reminder in reminders %}
+        <tr>
+            <td>{{ reminder.student }}</td>
+            <td>{{ reminder.day_of_week }}</td>
+            <td>{{ reminder.time_of_day }}</td>
+            <td>{{ reminder.custom_message }}</td>
+            <td>
+                <a href="{% url 'reminder_edit' reminder.pk %}" class="btn btn-sm btn-warning">編集</a>
+                <a href="{% url 'reminder_delete' reminder.pk %}" class="btn btn-sm btn-danger">削除</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

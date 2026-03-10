@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}英検対策：長文読解クイズ選択{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+            </li>
+            {% if classroom_id %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'organization_admin:classroom_detail' classroom_id %}">教室詳細</a>
+                </li>
+            {% endif %}
+        {% elif user.role == 'teacher' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:teacher_dashboard' %}">担当生徒一覧</a>
+            </li>
+        {% endif %}
+        {% if classroom_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:student_detail' student.id %}?classroom_id={{ classroom_id }}">生徒詳細</a>
+            </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">英検クイズ選択</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+<h2>{{ student.username }} さんの英検読解クイズ出題</h2>
+
+<!-- ✅ 新規出題は常に可能 -->
+<form method="post" action="{% url 'read_trainer:quiz_admin_dispatch' %}" class="mb-4" data-disable-on-submit="true">
+    {% csrf_token %}
+    <input type="hidden" name="target_student_id" value="{{ student.id }}">
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    <input type="hidden" name="quiz_type" value="eiken_new">
+
+    <div class="mb-3">
+        <label for="eikenLevelNew" class="form-label">英検レベル（新規）</label>
+        <select id="eikenLevelNew" name="eiken_level" class="form-select" required>
+        <option value="" disabled selected>レベルを選択してください</option>
+        <option value="5">英検5級</option>
+        <option value="4">英検4級</option>
+        <option value="3">英検3級</option>
+        <option value="pre2">英検準2級</option>
+        <option value="2">英検2級</option>
+        </select>
+    </div>
+
+    <button type="submit" class="btn btn-success" data-loading-text="生成中...">🆕 新規長文＋新規問題で出題</button>
+</form>
+
+{% if progresses_of_recommended_passage %}
+    <form method="post" action="{% url 'read_trainer:quiz_admin_dispatch' %}" class="mb-4" data-disable-on-submit="true">
+    {% csrf_token %}
+    <input type="hidden" name="target_student_id" value="{{ student.id }}">
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+
+    <div class="mb-3">
+        <label for="eikenLevelReuse" class="form-label">英検レベル（復習）</label>
+        <select id="eikenLevelReuse" name="eiken_level" class="form-select" required>
+        <option value="" disabled selected>レベルを選択してください</option>
+        <option value="5">英検5級</option>
+        <option value="4">英検4級</option>
+        <option value="3">英検3級</option>
+        <option value="pre2">英検準2級</option>
+        <option value="2">英検2級</option>
+        </select>
+    </div>
+
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="quiz_type" value="eiken_reuse_questions" id="reuseQuestions" required>
+        <label class="form-check-label" for="reuseQuestions">♻️ 既存長文＋新規問題</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="quiz_type" value="eiken_reuse_all" id="reuseAll" required>
+        <label class="form-check-label" for="reuseAll">🔁 既存長文＋既存問題</label>
+    </div>
+
+    <h5 class="mt-4">復習対象の英検長文</h5>
+    {% for progress in progresses_of_recommended_passage %}
+        {% if progress.passage.source_type == 'eiken' %}
+        <div class="border p-2 rounded my-2">
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="passage_id" value="{{ progress.passage.id }}" id="passage{{ forloop.counter }}" required>
+            <label class="form-check-label" for="passage{{ forloop.counter }}">
+            <strong>{{ progress.passage.title }}</strong><br>
+            <small class="text-muted">{{ progress.passage.content|truncatechars:80 }}</small>
+            </label>
+            <div><small class="text-muted">優先度: {{ progress.calculated_priority|floatformat:2 }}, 最終復習日: {{ progress.last_reviewed_at|date:"Y/m/d H:i" }}</small></div>
+        </div>
+        </div>
+        {% endif %}
+    {% endfor %}
+
+    <button type="submit" class="btn btn-primary mt-3" data-loading-text="生成中...">この設定で出題</button>
+    </form>
+{% else %}
+    <div class="alert alert-warning mt-4">
+        現在、復習に適した英検長文は登録されていません。
+    </div>
+{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}新規教室作成{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a></li>
+        <li class="breadcrumb-item active" aria-current="page">新規教室作成</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>新規教室作成</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="btn btn-primary">作成</button>
+        <a href="{% url 'organization_admin:classroom_list' %}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore, with the addition of
+# "#!include" directives (which insert the entries of the given .gitignore-style
+# file at that point).
+#
+# For more information, run:
+#   $ gcloud topic gcloudignore
+#
+
+.gcloudignore
+
+# Git関連
+.git
+.gitignore
+
+# 環境変数ファイル（ローカル用）
+.env
+
+# Python pycache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Django関連ファイル
+db.sqlite3  # SQLiteデータベース（本番環境では通常不要）
+# /staticfiles/  # collectstaticで生成される静的ファイル
+/media/  # ユーザーがアップロードしたファイル
+
+# 不要なファイル
+*.log  # ログファイル
+*.DS_Store  # macOS用のメタファイル
+*.swp  # Vimや他のエディタの一時ファイル
+
+# Pythonビルド関連
+/setup.cfg
+
+# sql-proxy関連
+/sql_proxy_tools/
+
+# ローカルのトリガーテスト関連
+trigger_reminders.py
+
+# 内部処理用
+import_excel.py
+input_excel/
+input_pdf/
+read_pdf_sample.py
+extract_pdf.py
+
+/data/
+
+# ローカルで利用するSAの機密情報
+service-account-key.json
+
+# Python venv（最重要）
+.venv/
+.venv*/
+venv/
+ENV/
+env/
+
+# Python/テスト/型チェック等の生成物
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/

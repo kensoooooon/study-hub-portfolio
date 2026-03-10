@@ -1,0 +1,228 @@
+{% extends 'math_trainer/common/base.html' %} 
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% include "math_trainer/common/breadcrumbs.html" %}
+        {% if classroom_id and student_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'math_trainer:index' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">計算練習一覧</a>
+            </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">2年生の計算練習一覧</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% load static %}
+
+{% block script %}
+<script src="{% static 'math_trainer/js/elementary2/clock_draw.js' %}"></script>
+<script src="{% static 'math_trainer/js/common/refresh.js' %}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('problem-select-form'); // 既存のフォームID
+    // ここで「検証するグループ」を宣言（Pythonのキーワード引数っぽく渡す）
+    const groupConfigs = [
+        { name: 'problem_type',  alert: '#problemTypeAlert'  },
+        { name: 'width_of_time', alert: '#widthOfTimeAlert' },
+    ];
+
+    // グループを初期化して要素・アラートDOMを紐づけ
+    const groups = groupConfigs.map(({name, alert}) => {
+        const elems = Array.from(form.querySelectorAll(`input[name="${name}"]`));
+        const alertEl = document.querySelector(alert);
+        return { name, elems, alertEl };
+    });
+
+    // アラート表示/非表示
+    function showAlert(alertEl, show){
+        if (!alertEl) return;
+        alertEl.classList.toggle('d-none', !show);
+        if (show) alertEl.focus();
+    }
+
+    // 単一グループの検証
+    function validateGroup(group){
+        // 対象の入力群が無いページではスキップ
+        if (!group.elems.length) return true;
+        const ok = group.elems.some(el => el.checked);
+        showAlert(group.alertEl, !ok);
+        return ok;
+    }
+
+    // 送信時に全グループを検証（どれか一つでもNGなら送信しない）
+    form.addEventListener('submit', (e) => {
+        let firstBad = null;
+        for (const g of groups){
+        const ok = validateGroup(g);
+        if (!ok && !firstBad) firstBad = g;
+        }
+        if (firstBad){
+        e.preventDefault();
+        // 最初のNGグループへ視線誘導（アラートにフォーカス済み）
+        }
+    });
+
+    // 変更があれば当該グループだけ再検証（アラートを自動で隠す）
+    for (const g of groups){
+        g.elems.forEach(el => el.addEventListener('change', () => validateGroup(g)));
+    }
+
+    // 既存の「全部のせ/全部はずし」を汎用化（nameで対象グループを指定）
+    window.checkAllStatus = (name) => {
+        const g = groups.find(x => x.name === name);
+        if (!g) return;
+        g.elems.forEach(el => { if (el.type === 'checkbox') el.checked = true; });
+        validateGroup(g);
+    };
+    window.uncheckAllStatus = (name) => {
+        const g = groups.find(x => x.name === name);
+        if (!g) return;
+        g.elems.forEach(el => { if (el.type === 'checkbox') el.checked = false; });
+        validateGroup(g);
+    };
+    });
+</script>
+{% endblock %}
+
+
+{% block content %}
+<form id="problem-select-form" method="post" action="?" class="border-bottom border-end" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="student_id" value="{{ student_id }}">
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+
+    {% if messages %}
+        <div id="flash-messages" aria-live="polite" aria-atomic="true">
+            {% for message in messages %}
+                <div
+                    class="alert
+                    {% if 'error' in message.tags %}alert-danger
+                    {% elif 'warning' in message.tags %}alert-warning
+                    {% elif 'success' in message.tags %}alert-success
+                    {% else %}alert-info{% endif %}"
+                    role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <fieldset>
+    <legend>⏰ 時計</legend>
+        <input type="hidden" name="problem_category" value="clock">
+        <small class="text-muted">出題される問題</small>
+        <div id="problemTypeAlert" class="alert alert-warning d-none" role="alert" tabindex="-1" aria-live="polite">
+            ※最低1つの問題タイプを選択してください。
+        </div>
+        <div class="form-group">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="problem_type" value="read_time" id="problem_type_read_time" checked>
+                <label class="form-check-label" for="problem_type_read_time">時計の絵から時刻を読み取る</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="time_delta_without_am_pm_with_picture" name="problem_type" id="problem_type_time_delta_without_am_pm_with_picture" checked>
+                <label class="form-check-label" for="problem_type_time_delta_without_am_pm_with_picture">
+                    ある時間の前後の時間を答える(午前・午後なし)+時計絵の表示あり
+                </label>
+            </div>
+            <br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="time_delta_with_am_pm_with_picture" name="problem_type" id="problem_type_time_delta_with_am_pm_with_picture" checked>
+                <label class="form-check-label" for="problem_type_time_delta_with_am_pm_with_picture">
+                    ある時間の前後の時間を答える(午前・午後あり)+時計絵の表示あり
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="time_delta_with_am_pm_without_picture" name="problem_type" id="problem_type_time_delta_with_am_pm_without_picture">
+                <label class="form-check-label" for="problem_type_time_delta_with_am_pm_without_picture">
+                    ある時間の前後の時間を答える(午前・午後あり)+時計絵の表示なし
+                </label>
+            </div>
+            <br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="time_delta_with_24_hours_with_picture" name="problem_type" id="problem_type_time_delta_with_24_hours_with_picture" checked>
+                <label class="form-check-label" for="problem_type_time_delta_with_24_hours_with_picture">
+                    ある時間の前後の時間を答える(24時間)+時計絵の表示あり
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="time_delta_with_24_hours_without_picture" name="problem_type" id="problem_type_time_delta_with_24_hours_without_picture">
+                <label class="form-check-label" for="problem_type_time_delta_with_24_hours_without_picture">
+                    ある時間の前後の時間を答える(24時間)+時計絵の表示なし
+                </label>
+            </div>
+            <br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="time_delta_with_two_clock_pictures" name="problem_type" id="problem_type_time_delta_with_two_clock_pictures">
+                <label class="form-check-label" for="problem_type_time_delta_with_two_clock_pictures">
+                    2つの時計の絵から、経過した時間を求める
+                </label>
+            </div>
+            <br>
+            <br>
+            <input class="btn btn-outline-primary" type="button" onclick="checkAllStatus('problem_type')" value="全部のせ">
+            <input class="btn btn-outline-primary" type="button" onclick="uncheckAllStatus('problem_type')" value="全部はずし">
+        </div>
+        <br>
+        <br>
+        <small class="text-muted">時間の幅</small>
+        <div id="widthOfTimeAlert" class="alert alert-warning d-none" role="alert" tabindex="-1" aria-live="polite">
+            ※最低1つの時間の幅を選択してください。
+        </div>
+        <div class="form-group">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="less_than_one_hour" name="width_of_time" id="width_of_time_less_than_one_hour">
+                <label class="form-check-label" for="width_of_time_less_than_one_hour">
+                    1時間未満
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" value="greater_than_or_equal_to_one_hour" name="width_of_time" id="width_of_time_greater_than_or_equal_to_one_hour" checked>
+                <label class="form-check-label" for="width_of_time_greater_than_or_equal_to_one_hour">
+                    1時間以上
+                </label>
+            </div>
+        </div>
+        <br>
+        <br>
+        <small class="text-muted">枚数</small>
+        <div class="form-group">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="1" name="paper_number" id="ClockOnePaperRadio">
+                <label class="form-check-label" for="ClockOnePaperRadio">
+                    6問×1枚
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="2" name="paper_number" id="ClockTwoPaperRadio">
+                <label class="form-check-label" for="ClockTwoPaperRadio">
+                    6問×2枚
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="5" name="paper_number" id="ClockFivePaperRadio" checked>
+                <label class="form-check-label" for="ClockFivePaperRadio">
+                    6問×5枚
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="10" name="paper_number" id="ClockTenPaperRadio">
+                <label class="form-check-label" for="ClockTenPaperRadio">
+                    6問×10枚
+                </label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" value="15" name="paper_number" id="ClockFifteenPaperRadio">
+                <label class="form-check-label" for="ClockFifteenPaperRadio">
+                    6問×15枚
+                </label>
+            </div>
+        </div>
+        <br>
+        <input class="btn btn-primary" type="submit" value="A4印刷用ページ表示" formaction="{% url 'math_trainer:elementary2:dispatcher_print' %}">
+        <input class="btn btn-primary" type="submit" value="そのまま解く(6問)" formaction="{% url 'math_trainer:elementary2:dispatcher_display' %}">      
+    </fieldset>
+</form>
+{% endblock %}

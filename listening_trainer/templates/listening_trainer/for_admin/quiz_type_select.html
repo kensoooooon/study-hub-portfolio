@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+            </li>
+            {% if classroom_id %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'organization_admin:classroom_detail' classroom_id %}">教室詳細</a>
+                </li>
+            {% endif %}
+        {% elif user.role == 'teacher' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:teacher_dashboard' %}">担当生徒一覧</a>
+            </li>
+        {% endif %}
+        {% if classroom_id %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:student_detail' student.id %}?classroom_id={{ classroom_id }}">生徒詳細</a>
+            </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">リスニングクイズ選択</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block title %}教科書：リスニングクイズ選択{% endblock %}
+
+{% block content %}
+<h2>{{ student.username }} さんのリスニングクイズ出題</h2>
+
+<!-- ✅ 新規長文 + 新規問題 -->
+<form method="post" action="{% url 'listening_trainer:quiz_admin_dispatch' %}" class="my-3" data-disable-on-submit="true">
+    {% csrf_token %}
+    <input type="hidden" name="quiz_type" value="new">
+    <input type="hidden" name="target_student_id" value="{{ student.id }}">
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    <button type="submit" class="btn btn-success" data-loading-text="生成中...">🆕 新しい長文で出題</button>
+</form>
+
+{% if progresses_of_recommended_passage %}
+    <!-- ✅ 既存長文を使った復習（新規/既存問題） -->
+    <form method="post" action="{% url 'listening_trainer:quiz_admin_dispatch' %}" class="mt-4" data-disable-on-submit="true">
+    {% csrf_token %}
+    <input type="hidden" name="target_student_id" value="{{ student.id }}">
+    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+
+    <h4>復習モードを選択してください</h4>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="quiz_type" value="reuse_questions" id="typeReuseQuestions" required>
+        <label class="form-check-label" for="typeReuseQuestions">♻️ 既存長文 + 新しい問題</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="quiz_type" value="reuse_all" id="typeReuseAll" required>
+        <label class="form-check-label" for="typeReuseAll">🔁 既存長文 + 既存問題</label>
+    </div>
+
+    <h4 class="mt-4">復習に使う長文を選んでください</h4>
+    {% for progress in progresses_of_recommended_passage %}
+        <div class="border p-2 rounded my-2">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="passage_id" value="{{ progress.passage.id }}" id="passage{{ forloop.counter }}" required>
+                <label class="form-check-label" for="passage{{ forloop.counter }}">
+                <strong>{{ progress.passage.title|default:"タイトル未設定" }}</strong><br>
+                <small class="text-muted">{{ progress.passage.content|truncatewords:20 }}</small>
+                </label>
+                <small class="text-muted">
+                    優先度: {{ progress.calculated_priority|default:"計算不能"|floatformat:2 }}
+                    最終復習日: {{ progress.last_reviewed_at|date:"Y/m/d H:i" }}
+                </small>
+            </div>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<button type="submit" class="btn btn-primary mt-3" data-loading-text="生成中...">この設定で出題</button>
+</form>
+{% endblock %}

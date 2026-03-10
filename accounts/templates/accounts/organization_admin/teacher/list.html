@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block title %}講師一覧{% endblock %}
+
+{% block content %}
+<h1>講師一覧</h1>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>名前</th>
+            <th>メールアドレス</th>
+            <th>担当教室</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for teacher in teachers %}
+        <tr>
+            <td>{{ teacher.username }}</td>
+            <td>{{ teacher.email }}</td>
+            <td>
+                <ul>
+                    {% for classroom in teacher.classrooms.all %}
+                    <li>{{ classroom.name }}</li>
+                    {% endfor %}
+                </ul>
+            </td>
+            <td><a href="{% url 'organization_admin:teacher_edit' teacher.pk %}" class="btn btn-sm btn-info">編集</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="{% url 'organization_admin:teacher_add' %}" class="btn btn-success mt-3">新規講師作成</a>
+{% endblock %}

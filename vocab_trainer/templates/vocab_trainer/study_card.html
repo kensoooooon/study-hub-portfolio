@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block title %}学習カード{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student:home' %}">ホーム</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'student:english_history' %}">学習履歴</a></li>
+        <li class="breadcrumb-item active" aria-current="page">学習カード</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>{{ relation.english_word.word }}</h1>
+
+    <h4>品詞:
+        {% for pos in relation.parts_of_speech.all %}
+            {{ pos.part_of_speech.display_name }}{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+    </h4>
+
+    <p><strong>意味:</strong> {{ relation.japanese_meaning.meaning }}</p>
+    <p><strong>チャプター:</strong> {{ context_obj.chapter.title }}</p>
+    <p><strong>教科書:</strong> {{ context_obj.chapter.textbook.name }}（中{{ context_obj.chapter.textbook.grade }}年）</p>
+
+    <p><strong>例文:</strong></p>
+    <p>{{ example_sentence|default:"例文が登録されていません。"|linebreaksbr }}</p>
+
+    <hr>
+    <p>最終確認日: {{ progress.last_answered_at|date:"Y/m/d H:i" }}</p>
+    <p>復習優先度: {{ progress.review_priority|floatformat:2 }}</p>
+
+    <a href="{% url 'student:english_history' %}" class="btn btn-secondary">戻る</a>
+</div>
+
+{% endblock %}
+

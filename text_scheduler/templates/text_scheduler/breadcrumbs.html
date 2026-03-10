@@ -1,0 +1,32 @@
+{% load url_extras %}
+
+        {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:classroom_list' %}">教室一覧</a>
+            </li>
+            {% if classroom_id %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'organization_admin:classroom_detail' classroom_id %}">教室詳細</a>
+                </li>
+                {% if student_id %}
+                <li class="breadcrumb-item">
+                    {% url 'organization_admin:student_detail' student_id as base %}
+                    <a href="{% url_with_query base classroom_id=classroom_id %}">生徒詳細</a>
+                </li>
+                {% endif %}
+            {% endif %}
+        {% elif user.role == 'teacher' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'organization_admin:teacher_dashboard' %}">担当生徒一覧</a>
+            </li>
+            {% if classroom_id and student_id %}
+                <li class="breadcrumb-item">
+                    {% url 'organization_admin:student_detail' student_id as base %}
+                    <a href="{% url_with_query base classroom_id=classroom_id %}">生徒詳細</a>
+                </li>
+            {% endif %}
+        {% elif user.role == 'student' %}
+            <li class="breadcrumb-item">
+                <a href="{% url 'student:home' %}">ホーム</a>
+            </li>
+        {% endif %}

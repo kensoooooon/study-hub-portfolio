@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}成果報告{% endblock %}
+{% load url_extras %}
+
+
+{% block breadcrumbs %}
+    <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% include "text_scheduler/breadcrumbs.html" %}
+        <li class="breadcrumb-item">
+            {% url 'text_scheduler:material_list' as base %}
+                {% if classroom_id %}
+                    <a href="{% url_with_query base student_id=student_id classroom_id=classroom_id %}">教材一覧</a>
+                {% else %}
+                    <a href="{% url_with_query base student_id=student_id %}">教材一覧</a>
+                {% endif %}
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">成果報告</li>
+    </ol>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">成果報告 – {{ material.title }}（{{ student }}）</h1>
+
+<form method="post">
+    {% csrf_token %}
+
+    {# ▼ フォーム全体のエラー（non_field_errors） #}
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+        <ul class="mb-0">
+        {% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    <div class="row g-3">
+        <div class="col-md-3">
+            <label class="form-label">番号</label>
+            {{ form.number }}
+            {% if form.number.help_text %}<div class="form-text">{{ form.number.help_text }}</div>{% endif %}
+            {% if form.number.errors %}
+                <div class="invalid-feedback d-block">
+                {% for e in form.number.errors %}{{ e }}{% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label">種別</label>
+            {{ form.kind }}
+            {% if form.kind.errors %}
+                <div class="invalid-feedback d-block">{% for e in form.kind.errors %}{{ e }}{% endfor %}</div>
+            {% endif %}
+        </div>
+        
+        <div class="col-md-3">
+            <label class="form-label">品質(0-5)</label>
+            {{ form.quality }}
+            {% if form.quality.errors %}
+                <div class="invalid-feedback d-block">{% for e in form.quality.errors %}{{ e }}{% endfor %}</div>
+            {% endif %}
+        </div>
+        
+        <div class="col-md-3">
+            <label class="form-label">学習時間(分)</label>
+            {{ form.spent_minutes }}
+            {% if form.spent_minutes.errors %}
+                <div class="invalid-feedback d-block">{% for e in form.spent_minutes.errors %}{{ e }}{% endfor %}</div>
+            {% endif %}
+        </div>
+        
+        {# メモ系も同様に #}
+        <div class="col-md-4">
+            <label class="form-label">メモ1</label>
+            {{ form.point_1 }}
+            {% if form.point_1.errors %}<div class="invalid-feedback d-block">{% for e in form.point_1.errors %}{{ e }}{% endfor %}</div>{% endif %}
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">メモ2</label>
+            {{ form.point_2 }}
+            {% if form.point_2.errors %}<div class="invalid-feedback d-block">{% for e in form.point_2.errors %}{{ e }}{% endfor %}</div>{% endif %}
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">メモ3</label>
+            {{ form.point_3 }}
+            {% if form.point_3.errors %}<div class="invalid-feedback d-block">{% for e in form.point_3.errors %}{{ e }}{% endfor %}</div>{% endif %}
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label">正誤</label>
+            {{ form.is_correct }}
+            {% if form.is_correct.errors %}<div class="invalid-feedback d-block">{% for e in form.is_correct.errors %}{{ e }}{% endfor %}</div>{% endif %}
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <button type="submit" class="btn btn-primary">報告する</button>
+        <a href="{% url 'text_scheduler:material_list' %}{% if student_id or classroom_id %}?{% endif %}{% if student_id %}student_id={{ student_id|urlencode }}{% endif %}{% if student_id and classroom_id %}&{% endif %}{% if classroom_id %}classroom_id={{ classroom_id|urlencode }}{% endif %}">教材一覧</a>
+    </div>
+
+    <div class="mt-4">
+        <a class="btn btn-outline-secondary"
+        href="{% url 'text_scheduler:studylog_bulk_create' student_id=student_id material_id=material.id %}{% if student_id or classroom_id %}?{% endif %}{% if student_id %}student_id={{ student_id|urlencode }}{% endif %}{% if student_id and classroom_id %}&{% endif %}{% if classroom_id %}classroom_id={{ classroom_id|urlencode }}{% endif %}">
+        複数件入力へ
+        </a>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 例：候補の番号をクリックしたら input に反映する想定
+    document.querySelectorAll("[data-number-chip]").forEach(el => {
+        el.addEventListener("click", () => {
+        const n = el.getAttribute("data-number-chip");
+        const input = document.getElementById("id_number");
+        if (input) { input.value = n; }
+        });
+    });
+
+    document.querySelector("form").addEventListener("submit", function(e){
+    const num = document.getElementById("id_number");
+    if(!num) return;
+    const v = Number(num.value);
+    const min = Number(num.getAttribute("min"));
+    const max = Number(num.getAttribute("max"));
+    if(Number.isNaN(v) || v < min || v > max){
+        e.preventDefault();
+        // その場で見えるメッセージ
+        let fb = num.closest(".col-md-3").querySelector(".invalid-feedback");
+        if(!fb){
+        fb = document.createElement("div");
+        fb.className = "invalid-feedback d-block";
+        num.closest(".col-md-3").appendChild(fb);
+        }
+        fb.textContent = `番号が範囲外です（${min}〜${max}）。`;
+        num.focus();
+    }
+    });
+</script>
+{% endblock %}

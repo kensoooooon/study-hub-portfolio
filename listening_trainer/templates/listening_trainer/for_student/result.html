@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'student:home' %}">ホーム</a>
+        </li>
+        <li class="breadcrumb-item">
+            {% if is_eiken %}
+                <form method="post" action="{% url 'listening_trainer:eiken_quiz_type_select_for_student' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link p-0 m-0 align-baseline">英検リスニングクイズ選択</button>
+                </form>
+            {% else %}
+                <form method="post" action="{% url 'listening_trainer:quiz_type_select_for_student' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link p-0 m-0 align-baseline">教科書リスニングクイズ選択</button>
+                </form>
+            {% endif %}
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">解答結果</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<h2>解答結果</h2>
+
+<button id="play-audio-btn" class="btn btn-outline-primary mb-3">▶ 再生</button>
+<input type="hidden" id="is-audio-generated" value="false">
+
+
+
+<p class="mt-3"><strong>本文:</strong></p>
+<p>{{ passage.content|linebreaks }}</p>
+{% if passage.japanese_translation %}
+    <p class="mt-4"><strong>日本語訳：</strong></p>
+    <p>{{ passage.japanese_translation|linebreaks }}</p>
+{% endif %}
+<hr>
+
+{% for result in results %}
+    <div class="mb-4">
+        <h4>Q{{ forloop.counter }}: {{ result.question.question_text }}</h4>
+
+        {% if result.is_correct %}
+        <p class="text-success">✅ 正解</p>
+        {% else %}
+        <p class="text-danger">❌ 不正解（選んだ: {{ result.selected_option }} / 正解: {{ result.correct_option }}）</p>
+        {% endif %}
+
+        <ul class="list-unstyled">
+        {% for option_label, option_text in result.options %}
+            <li>
+            {% if option_label == result.correct_option %}
+                <strong class="text-success">✔ {{ option_label }}: {{ option_text }}</strong>
+            {% elif option_label == result.selected_option %}
+                <strong class="text-danger">✖ {{ option_label }}: {{ option_text }}</strong>
+            {% else %}
+                {{ option_label }}: {{ option_text }}
+            {% endif %}
+            </li>
+        {% endfor %}
+        </ul>
+
+        {% if not result.is_correct %}
+        <p class="text-muted">解説: {{ result.question.explanation }}</p>
+        {% endif %}
+    </div>
+{% endfor %}
+
+<hr>
+
+    <div class="d-flex justify-content-between mt-5">
+        {% if is_eiken %}
+            <a href="{% url 'listening_trainer:eiken_quiz_type_select_for_student' %}">英検用リスニングクイズ選択</a>
+        {% else %}
+            <a href="{% url 'listening_trainer:quiz_type_select_for_student' %}">教科書用リスニングクイズ選択</a>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block script %}
+<script>
+    const audio = new Audio();
+    const filenamesRaw = "{{ audio_file_names|escapejs }}";
+    const playButton = document.getElementById("play-audio-btn");
+    const isAudioGenerated = document.getElementById("is-audio-generated");
+    const mediaURL = "{{ MEDIA_URL }}";
+
+    let urls = [];
+    let filenames = [];
+
+    // 音声ファイル名が空なら再生成
+    if (!filenamesRaw.trim()) {
+        fetch("{% url 'audio_support:speak_dialogue' %}?passage_id={{ passage.id }}")
+            .then(res => res.json())
+            .then(data => {
+                if (!Array.isArray(data) || !data.length) {
+                    alert("音声ファイルが生成できませんでした。ページを再読み込みしてください。");
+                    return;
+                }
+
+                filenames = data.map(item => item.filename);
+                urls = filenames.map(name => mediaURL + "temp_audio/" + name);
+                isAudioGenerated.value = "true";
+            })
+            .catch(err => {
+                reportErrorToDev("音声再生成に失敗:", err);
+                alert("音声再生に失敗しました。ページを再読み込みしてください。");
+            });
+    } else {
+    // ✅ 既存ファイル名があればすぐに初期化
+    filenames = filenamesRaw.split(',').filter(name => name);
+    urls = filenames.map(name => mediaURL + "temp_audio/" + name);
+    isAudioGenerated.value = "true";
+    }
+    
+    function prepareAudio() {
+        if (isAudioGenerated.value === "true") return;  // すでに構築済み
+
+        filenames = filenamesRaw.split(',').filter(name => name);
+        urls = filenames.map(name => mediaURL + "temp_audio/" + name);
+        isAudioGenerated.value = "true";
+    }
+
+    playButton.addEventListener("click", () => {
+        if (playButton.disabled) return;
+
+        // ✅ 再生ボタンを即座に無効化（クリックと同時）
+        playButton.disabled = true;
+
+        prepareAudio();
+        if (!urls.length) {
+            alert("音声ファイルが見つかりませんでした。");
+            playButton.disabled = false;
+            return;
+        }
+
+        playButton.disabled = true;
+
+
+        
+        let i = 0;
+        function playNext() {
+            if (i < urls.length) {
+                audio.src = urls[i++];
+                audio.play();
+                audio.onended = playNext;
+            } else {
+                playButton.disabled = false;
+            }
+        }
+        playNext();
+    });
+
+    window.addEventListener("unload", () => {
+        if (!filenames.length) return;
+        const data = new FormData();
+        data.append("filenames", filenames.join(","));
+        navigator.sendBeacon("/audio_support/delete_temp_audio_post_batch/", data);
+    });
+</script>
+{% endblock %}

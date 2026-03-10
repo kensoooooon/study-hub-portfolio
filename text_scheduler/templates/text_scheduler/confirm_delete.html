@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% load url_extras %}
+
+{% block title %}教材の削除確認{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    {% include "text_scheduler/breadcrumbs.html" %}
+    <li class="breadcrumb-item">
+      {% url 'text_scheduler:material_list' as base %}
+        {% if classroom_id %}
+          <a href="{% url_with_query base student_id=student_id classroom_id=classroom_id %}">教材一覧</a>
+        {% else %}
+          <a href="{% url_with_query base student_id=student_id %}">教材一覧</a>
+        {% endif %}
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">
+      教材の削除確認
+    </li>
+  </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-3">
+  <h1 class="mb-3">教材を削除しますか？</h1>
+  <div class="alert alert-warning">
+    <p class="mb-0">
+      「{{ object.title }}（{{ object.start_number }}–{{ object.end_number }}{{ object.unit_label }}）」を削除します。<br>
+      この操作は元に戻せません。関連する進捗やログへの影響を事前にご確認ください。
+    </p>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="d-flex gap-2 mt-3">
+      <button type="submit" class="btn btn-danger">本当に削除する</button>
+
+      {% url 'text_scheduler:material_edit' object.pk as edit_base %}
+      {% if classroom_id %}
+        <a class="btn btn-secondary" href="{% url_with_query edit_base student_id=request.GET.student_id classroom_id=request.GET.classroom_id %}">
+          キャンセル（編集に戻る）
+        </a>
+      {% else %}
+        <a class="btn btn-secondary" href="{% url_with_query edit_base student_id=request.GET.student_id %}">
+          キャンセル（編集に戻る）
+        </a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

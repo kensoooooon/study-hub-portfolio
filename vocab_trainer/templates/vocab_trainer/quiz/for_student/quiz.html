@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+
+{% block title %}4択クイズ{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student:home' %}">ホーム</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'vocab_trainer:quiz_type_select_for_student' %}">クイズ選択画面</a></li>
+        <li class="breadcrumb-item active" aria-current="page">クイズ</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1>4択クイズ</h1>
+<h2>{{ question_text }}</h2>
+
+<audio id="audio-player" controls style="display: none;">
+    <source id="audio-source" type="audio/mpeg">
+    音声を再生できませんでした。
+</audio>
+
+<form id="quiz-form" method="post" action="{% url 'vocab_trainer:check_answer_for_student' %}">
+    {% csrf_token %}
+    <input type="hidden" name="correct_answer" value="{{ correct_answer }}">
+    <input type="hidden" name="question_text" value="{{ question_text }}">
+    <input type="hidden" name="quiz_type" value="{{ quiz_type }}">
+    <input type="hidden" name="quiz_mode" value="{{ quiz_mode }}">
+    <input type="hidden" name="context_id" value="{{ context.id }}">
+    {% if quiz_mode == 'chapter' %}
+        {% for chapter_id in chapter_ids %}
+            <input type="hidden" name="chapter_ids" value="{{ chapter_id }}">
+        {% endfor %}
+    {% endif %}
+    <ul>
+        {% for choice in choices %}
+        <li>
+            <label>
+                <input type="radio" name="selected_answer" value="{{ choice }}" required>
+                {{ choice }}
+            </label>
+        </li>
+        {% endfor %}
+    </ul>
+    <button type="submit" class="btn btn-primary" id="submit-button">回答する</button>
+</form>
+
+<!-- ✅ 次の問題へは POST で送信 -->
+<div id="result" style="display:none;">
+    <h3 id="result-message"></h3>
+    <p id="correct-answer" style="font-weight: bold;"></p>
+    <p id="part-of-speech"></p>
+    <p id="example-sentence"></p>
+
+    <form id="next-question-form" method="post" action="
+        {% if quiz_mode == 'all' %}
+            {% url 'vocab_trainer:quiz_all_for_student' %}
+        {% elif quiz_mode == 'chapter' %}
+            {% url 'vocab_trainer:quiz_chapter_for_student' %}
+        {% elif quiz_mode == 'review' %}
+            {% url 'vocab_trainer:quiz_review_for_student' %}
+        {% else %}
+            {% url 'vocab_trainer:quiz_type_select_for_student' %}
+        {% endif %}
+    ">
+        {% csrf_token %}
+        <input type="hidden" name="quiz_mode" value="{{ quiz_mode }}">
+        <input type="hidden" name="quiz_type" value="{{ quiz_type }}">
+        <input type="hidden" name="question_text" value="{{ question_text }}">
+        <input type="hidden" name="correct_answer" value="{{ correct_answer }}">
+        {% for chapter_id in chapter_ids %}
+            <input type="hidden" name="chapter_ids" value="{{ chapter_id }}">
+        {% endfor %}
+        <button type="submit" class="btn btn-success">次の問題へ</button>
+    </form>
+</div>
+
+<!-- ✅ 採点中の表示とスピナーを追加 -->
+<div id="loading" style="display:none;">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p>採点中…しばらくお待ちください</p>
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script>
+    document.getElementById('quiz-form').onsubmit = function(event) {
+        event.preventDefault();
+
+        document.getElementById('submit-button').disabled = true;
+        document.getElementById('quiz-form').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+
+        var formData = new FormData(this);
+
+        fetch("{% url 'vocab_trainer:check_answer_for_student' %}", {
+            method: "POST",
+            headers: {
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('result').style.display = 'block';
+
+            if (data.is_correct) {
+                document.getElementById('result-message').innerText = '正解！';
+            } else {
+                document.getElementById('result-message').innerText = '不正解…';
+                document.getElementById('correct-answer').innerText = '正しい解答: ' + data.correct_answer;
+            }
+
+            // ✅ 品詞と例文の表示を復活
+            document.getElementById('part-of-speech').innerText = '品詞: ' + data.part_of_speech;
+            document.getElementById('example-sentence').innerText = '例文: ' + (data.example_sentence || '例文が登録されていません');
+        })
+        .catch(error => {
+            reportErrorToDev('エラーが発生しました:', error);
+            alert('エラーが発生しました。もう一度お試しください。');
+            document.getElementById('submit-button').disabled = false;
+            document.getElementById('quiz-form').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        });
+    };
+</script>
+
+<script>
+    const audio = document.getElementById('audio-player');
+    const source = document.getElementById('audio-source');
+    const contextId = "{{ context.id }}";
+    const mediaURL = "{{ MEDIA_URL }}";
+
+    let filenames = [];
+
+    fetch("{% url 'audio_support:speak_word' %}?context_id=" + contextId)
+        .then(response => {
+            if (!response.ok) {
+                reportWarningToDev("音声ファイル名の取得に失敗しました。status:", response.status);
+                return null;
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.filename) {
+                const fileUrl = mediaURL + "temp_audio/" + data.filename;
+                filenames.push(data.filename); // ✅ 忘れずに記録
+                source.src = fileUrl;
+                audio.style.display = 'block';
+                audio.load();
+            } else {
+                reportWarningToDev("不正なレスポンス形式:", data);
+            }
+        })
+        .catch(error => {
+            reportErrorToDev("音声ファイル名取得中にエラーが発生:", error);
+        });
+
+    // ✅ ページ離脱時に削除を依頼（POST）
+    let deleted = false;
+
+    window.addEventListener("visibilitychange", () => {
+        if (deleted || document.visibilityState !== "hidden") return;
+        deleted = true;
+
+        if (!filenames.length) return;
+        const data = new FormData();
+        data.append("filenames", filenames.join(","));
+        navigator.sendBeacon("{% url 'audio_support:delete_temp_audio_post_batch' %}", data);
+    });
+</script>
+{% endblock %}
