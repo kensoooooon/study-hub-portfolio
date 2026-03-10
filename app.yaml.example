@@ -1,0 +1,45 @@
+runtime: python312
+entrypoint: gunicorn -b :$PORT django_study_hub.wsgi
+
+service: default
+
+env_variables:
+  DJANGO_SETTINGS_MODULE: "django_study_hub.settings"
+  DJANGO_ALLOWED_HOSTS: "your-app.example.com"
+  DJANGO_DEBUG: "False"
+
+  # Database settings
+  DJANGO_DB_ENGINE: "django.db.backends.postgresql"
+  DJANGO_DB_NAME: "your-db-name"
+  DJANGO_DB_USER: "your-db-user"
+  DJANGO_DB_HOST: "/cloudsql/your-gcp-project-id:asia-northeast1:your-cloudsql-instance"
+  DJANGO_DB_PORT: "5432"
+
+  ENV: "production"
+
+  # Default account passwords
+  TEACHER_DEFAULT_PASSWORD: "changeme"
+  STUDENT_DEFAULT_PASSWORD: "changeme"
+
+  # KMS
+  LINE_KMS_KEY_RESOURCE: "projects/<project-id>/locations/asia-northeast1/keyRings/<key-ring>/cryptoKeys/<key-name>"
+
+  # Gunicorn access log without query strings
+  GUNICORN_CMD_ARGS: >-
+    --access-logfile - --access-logformat '%(h)s %(l)s %(u)s %(t)s "%(m)s %(U)s %(H)s" %(s)s %(b)s'
+
+  # Public base URL
+  APP_PUBLIC_BASE_URL_PROD: "https://your-app.example.com"
+
+handlers:
+  - url: /static
+    static_dir: staticfiles
+
+  - url: /.*
+    script: auto
+
+automatic_scaling:
+  max_instances: 3
+  min_idle_instances: 1
+  target_cpu_utilization: 0.6
+  target_throughput_utilization: 0.7
