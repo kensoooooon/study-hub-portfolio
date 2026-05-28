@@ -25,21 +25,18 @@ class Classroom(models.Model):
             return self.administrators.filter(id=user.id).exists()
         return False
 
-    """
-    # おそらく使ってないはず(self.roleはn)
-    def get_accessible_classrooms(self):
-        if self.role == 'organization_administrator':
-            return Classroom.objects.filter(organization__administrators=self)
-        elif self.role == 'classroom_administrator':
-            return self.classrooms.all()
-        return Classroom.objects.none()
-    """
-
 class Organization(models.Model):
     """
     組織モデル
     """
     name = models.CharField(max_length=100, unique=True, verbose_name="組織名")
+    
+    class Meta:
+        permissions = [  # 独自権限の設定
+            ("assign_organization_administrator", "Can assign user to organization administrator"),  # 組織に管理者を割り当て割当可能
+            ('view_all_organizations', "Can view all organizations"),  # 全ての組織を閲覧可能
+            ('invite_organization_administrator', "Invite new organization administrator"),  # 組織管理者として新規ユーザーを招待可能
+        ]
 
     def get_managed_classrooms(self):
         """

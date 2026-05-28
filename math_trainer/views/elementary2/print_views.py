@@ -7,7 +7,6 @@ from math_trainer.math_process import elementary2
 from math_trainer.models import GradeChoices
 
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
 
 from math_trainer.utils.student_access_check import student_access_check
 from math_trainer.utils.build_url import build_url
@@ -37,7 +36,12 @@ def redirect_to_elementary2_problem_select(request, *, student_id: str, classroo
 
 
 
-class Grade2PrintDispatcherView(LoginRequiredMixin, View):
+class Grade2PrintDispatcherView(View):
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
+
     def post(self, request):
         raw_student_id = request.POST.get("student_id")
         user = request.user
@@ -50,7 +54,12 @@ class Grade2PrintDispatcherView(LoginRequiredMixin, View):
             return redirect_to_elementary2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
         request.session["paper_number"] = paper_number
         category = request.POST.get("problem_category")
-        # 適宜問題タイプを追加する
+        if not category:
+            error_message = "最低1つの問題カテゴリを選択して下さい。"
+            return redirect_to_elementary2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
+        if category not in ["clock"]:
+            error_message = "想定されていないカテゴリが選択されました。"
+            return redirect_to_elementary2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
         if category == "clock":
             problem_types = request.POST.getlist("problem_type")
             if not problem_types:
@@ -65,12 +74,18 @@ class Grade2PrintDispatcherView(LoginRequiredMixin, View):
             base_url = reverse('math_trainer:elementary2:clock_print')
             url = build_url(base_url, student_id, classroom_id)
             return redirect(url)
-        else:
-            return render(request, "math_trainer/common/no_category.html")
+
+        error_message = "想定していない動作です。管理者にお知らせ下さい。"
+        return redirect_to_elementary2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
 
 
-class ClockPrintView(LoginRequiredMixin, View):
+class ClockPrintView(View):
     template_name = "math_trainer/elementary2/clock/for_print.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request):
         """クイズ画面の表示"""

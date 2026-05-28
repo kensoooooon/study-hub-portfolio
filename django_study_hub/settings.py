@@ -125,6 +125,10 @@ if ENV == "local":
 
     MEDIA_ROOT = BASE_DIR / "media"
     PUBSUB_REMINDER_TOPIC = os.getenv("PUBSUB_REMINDER_TOPIC", "reminder-topic-dev")
+    EMAIL_BACKEND = os.getenv(
+        "EMAIL_BACKEND",
+        "django.core.mail.backends.console.EmailBackend"
+    )
 
 else:
     print("Running in PRODUCTION environment")
@@ -169,6 +173,7 @@ else:
 
     MEDIA_ROOT = "/tmp/media"
     PUBSUB_REMINDER_TOPIC = os.getenv("PUBSUB_REMINDER_TOPIC", "reminder-topic")
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
 # Application definition
 
@@ -352,3 +357,14 @@ APP_PUBLIC_BASE_URL_PROD = os.getenv(
     "APP_PUBLIC_BASE_URL_PROD",
     "https://your-app.example.com",
 )
+
+# メール送信設定（ローカル/プロダクション共通）
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = True
+
+# OpenAI モデル設定（環境変数で上書き可能）
+OPENAI_MODEL_CHAT = os.getenv("OPENAI_MODEL_CHAT", "gpt-4o")
+OPENAI_MODEL_SHORT_TASK = os.getenv("OPENAI_MODEL_SHORT_TASK", "gpt-4")
+OPENAI_MODEL_SUMMARY = os.getenv("OPENAI_MODEL_SUMMARY", "gpt-4o")
+OPENAI_MODEL_PASSAGE_GENERATION = os.getenv("OPENAI_MODEL_PASSAGE_GENERATION", "gpt-4o")

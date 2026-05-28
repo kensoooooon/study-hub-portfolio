@@ -73,7 +73,7 @@ class Command(BaseCommand):
 
         else:
             file_list = [Path(root) / file for root, _, files in os.walk(base_path)
-                         for file in files if file.endswith(".tsv") and file != "チャプターリスト.tsv"]
+                        for file in files if file.endswith(".tsv") and file != "チャプターリスト.tsv"]
             total_files = len(file_list)
             self.stdout.write(f"全体更新開始: {total_files} ファイル")
 
@@ -98,7 +98,18 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"スキップ: 年度または学年が取得できません: {file_path}"))
             return
 
-        textbook = Textbook.objects.filter(
+        # 無効化済みの教材は語彙のアップデートの対象にならない
+        inactive = Textbook.objects.inactive().filter(
+            name=textbook_name, grade=grade, publication_year=publication_year
+        ).first()
+        if inactive:
+            self.stdout.write(self.style.WARNING(
+                f"スキップ: '{textbook_name}' 中{grade}年（{publication_year}年度）は"
+                f"無効状態のため更新対象外です。"
+            ))
+            return
+
+        textbook = Textbook.objects.active().filter(
             name=textbook_name, grade=grade, publication_year=publication_year
         ).first()
         if not textbook:

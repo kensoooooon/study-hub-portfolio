@@ -7,8 +7,53 @@ from datetime import timedelta
 
 import math
 
-from vocab_trainer.models import WordMeaningContext
 
+class ListeningPassageQuerySet(models.QuerySet):
+    def with_active_student(self):
+        return self.filter(created_by__is_active=True)
+
+    def visible_to(self, user):
+        qs = self.with_active_student()
+
+        if not getattr(user, "is_authenticated", False):
+            return qs.none()
+
+        if getattr(user, "is_superuser", False):
+            return qs
+
+        role = getattr(user, "role", None)
+        if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:
+            return qs.none()
+
+        if not hasattr(user, "get_role_object"):
+            return qs.none()
+        try:
+            role_obj = user.get_role_object()
+        except Exception:
+            return qs.none()
+        if role_obj is None:
+            return qs.none()
+
+        if role == "student":
+            return qs.filter(created_by_id=user.id)
+
+        if role == "teacher":
+            qs = qs.filter(created_by__teachers=role_obj)
+            if role_obj.organization_id:
+                qs = qs.filter(created_by__organization=role_obj.organization)
+            return qs.distinct()
+
+        if role == "classroom_administrator":
+            return qs.filter(
+                created_by__classrooms__in=role_obj.classrooms.all()
+            ).distinct()
+
+        if role == "organization_administrator":
+            return qs.filter(
+                created_by__organization__in=role_obj.get_accessible_organizations()
+            ).distinct()
+
+        return qs.none()
 
 
 class ListeningPassage(models.Model):
@@ -20,7 +65,7 @@ class ListeningPassage(models.Model):
     created_by = models.ForeignKey(Student, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     token_cost = models.PositiveIntegerField(default=0)
-    japanese_translation = models.TextField(blank=True)  # 和訳(新規追加)
+    japanese_translation = models.TextField(blank=True)
     SOURCE_CHOICES = [
         ('textbook', '教科書準拠'),
         ('eiken', '英検対策'),
@@ -34,10 +79,59 @@ class ListeningPassage(models.Model):
         ("2", "英検2級"),
     ]
     eiken_level = models.CharField(max_length=5, choices=EIKEN_LEVEL_CHOICES, null=True, blank=True)
+    objects = ListeningPassageQuerySet.as_manager()
+
     def __str__(self):
         return self.title or f"Listening problem created at {self.created_at.strftime('%Y-%m-%d %H:%M')}"
 
-        
+
+class ListeningQuestionQuerySet(models.QuerySet):
+    def with_active_student(self):
+        return self.filter(passage__created_by__is_active=True)
+
+    def visible_to(self, user):
+        qs = self.with_active_student()
+
+        if not getattr(user, "is_authenticated", False):
+            return qs.none()
+
+        if getattr(user, "is_superuser", False):
+            return qs
+
+        role = getattr(user, "role", None)
+        if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:
+            return qs.none()
+
+        if not hasattr(user, "get_role_object"):
+            return qs.none()
+        try:
+            role_obj = user.get_role_object()
+        except Exception:
+            return qs.none()
+        if role_obj is None:
+            return qs.none()
+
+        if role == "student":
+            return qs.filter(passage__created_by_id=user.id)
+
+        if role == "teacher":
+            qs = qs.filter(passage__created_by__teachers=role_obj)
+            if role_obj.organization_id:
+                qs = qs.filter(passage__created_by__organization=role_obj.organization)
+            return qs.distinct()
+
+        if role == "classroom_administrator":
+            return qs.filter(
+                passage__created_by__classrooms__in=role_obj.classrooms.all()
+            ).distinct()
+
+        if role == "organization_administrator":
+            return qs.filter(
+                passage__created_by__organization__in=role_obj.get_accessible_organizations()
+            ).distinct()
+
+        return qs.none()
+
 
 class ListeningQuestion(models.Model):
     """
@@ -52,9 +146,62 @@ class ListeningQuestion(models.Model):
     correct_option = models.CharField(max_length=1, choices=[('A', 'A'), ('B', 'B'), ('C', 'C'), ('D', 'D')])
     explanation = models.TextField()
     batch_id = models.PositiveIntegerField(default=1)
+    objects = ListeningQuestionQuerySet.as_manager()
 
     def __str__(self):
         return f"Q: {self.question_text[:30]}..."
+
+
+class ListeningAnswerQuerySet(models.QuerySet):
+    def with_active_and_valid_student(self):
+        return self.filter(
+            student__is_active=True,
+            question__passage__created_by__is_active=True,
+            question__passage__created_by=models.F("student"),
+        )
+
+    def visible_to(self, user):
+        qs = self.with_active_and_valid_student()
+
+        if not getattr(user, "is_authenticated", False):
+            return qs.none()
+
+        if getattr(user, "is_superuser", False):
+            return qs
+
+        role = getattr(user, "role", None)
+        if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:
+            return qs.none()
+
+        if not hasattr(user, "get_role_object"):
+            return qs.none()
+        try:
+            role_obj = user.get_role_object()
+        except Exception:
+            return qs.none()
+        if role_obj is None:
+            return qs.none()
+
+        if role == "student":
+            return qs.filter(student_id=user.id)
+
+        if role == "teacher":
+            qs = qs.filter(student__teachers=role_obj)
+            if role_obj.organization_id:
+                qs = qs.filter(student__organization=role_obj.organization)
+            return qs.distinct()
+
+        if role == "classroom_administrator":
+            return qs.filter(
+                student__classrooms__in=role_obj.classrooms.all()
+            ).distinct()
+
+        if role == "organization_administrator":
+            return qs.filter(
+                student__organization__in=role_obj.get_accessible_organizations()
+            ).distinct()
+
+        return qs.none()
 
 
 class ListeningAnswer(models.Model):
@@ -66,9 +213,62 @@ class ListeningAnswer(models.Model):
     selected_option = models.CharField(max_length=1, choices=[('A','A'),('B','B'),('C','C'),('D','D')])
     is_correct = models.BooleanField()
     answered_at = models.DateTimeField(auto_now_add=True)
+    objects = ListeningAnswerQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.student} answered Q{self.question.id} ({'✔' if self.is_correct else '✘'})"
+
+
+class StudentListeningPassageProgressQuerySet(models.QuerySet):
+    def with_active_and_valid_student(self):
+        return self.filter(
+            student__is_active=True,
+            passage__created_by__is_active=True,
+            passage__created_by=models.F("student"),
+        )
+
+    def visible_to(self, user):
+        qs = self.with_active_and_valid_student()
+
+        if not getattr(user, "is_authenticated", False):
+            return qs.none()
+
+        if getattr(user, "is_superuser", False):
+            return qs
+
+        role = getattr(user, "role", None)
+        if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:
+            return qs.none()
+
+        if not hasattr(user, "get_role_object"):
+            return qs.none()
+        try:
+            role_obj = user.get_role_object()
+        except Exception:
+            return qs.none()
+        if role_obj is None:
+            return qs.none()
+
+        if role == "student":
+            return qs.filter(student_id=user.id)
+
+        if role == "teacher":
+            qs = qs.filter(student__teachers=role_obj)
+            if role_obj.organization_id:
+                qs = qs.filter(student__organization=role_obj.organization)
+            return qs.distinct()
+
+        if role == "classroom_administrator":
+            return qs.filter(
+                student__classrooms__in=role_obj.classrooms.all()
+            ).distinct()
+
+        if role == "organization_administrator":
+            return qs.filter(
+                student__organization__in=role_obj.get_accessible_organizations()
+            ).distinct()
+
+        return qs.none()
 
 
 class StudentListeningPassageProgress(models.Model):
@@ -84,6 +284,7 @@ class StudentListeningPassageProgress(models.Model):
     repetition_count = models.IntegerField(default=0)
     next_due_at = models.DateTimeField(default=timezone.now)
     last_reviewed_at = models.DateTimeField(null=True, blank=True)
+    objects = StudentListeningPassageProgressQuerySet.as_manager()
 
     class Meta:
         unique_together = ('student', 'passage')
@@ -115,7 +316,6 @@ class StudentListeningPassageProgress(models.Model):
             else:
                 self.interval = int(self.interval * self.ease_factor)
 
-            # ease_factor の調整（SuperMemo公式より）
             ef = self.ease_factor + (0.1 - (5 - score) * (0.08 + (5 - score) * 0.02))
             self.ease_factor = max(1.3, ef)
         else:
@@ -127,12 +327,10 @@ class StudentListeningPassageProgress(models.Model):
         self.next_due_at = now + timedelta(days=self.interval)
         self.save()
 
-
     def get_review_priority(self, now=None, base_lambda: float = 0.2) -> float:
         now = now or timezone.now()
         days_diff = (now - self.next_due_at).days
         return math.exp(days_diff * base_lambda) if days_diff < 0 else min(1.0, math.exp(-base_lambda * -days_diff))
-
 
     def __str__(self):
         return f"{self.student} - {self.passage} (優先度: {self.get_review_priority():.2f})"

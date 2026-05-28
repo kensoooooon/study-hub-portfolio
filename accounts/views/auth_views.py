@@ -1,11 +1,24 @@
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import PermissionDenied
+from django.shortcuts import redirect
 from django.urls import reverse
 
 class CustomLoginView(LoginView):
-    template_name = 'accounts/auth/login.html'  # ここでテンプレート名を指定    
+    template_name = 'accounts/auth/login.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            redirect_to = self.get_redirect_url()
+            if redirect_to:
+                return redirect(redirect_to)
+            return redirect(self.get_success_url())
+        return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
+        redirect_to = self.get_redirect_url()  # nextが存在している場合はそちらを優先的に取る
+        if redirect_to:
+            return redirect_to
+
         user = self.request.user
         if user.is_superuser:
             return reverse('admin:index')

@@ -6,40 +6,33 @@
 2025/11/16
 教室への割当の際に、きちんと組織の所属をチェックするように変更
 """
+import logging
+
 
 from django.views.generic import ListView, DetailView, UpdateView, CreateView, DeleteView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse_lazy
-
-from ..models import Classroom
-from django.core.exceptions import PermissionDenied
-from accounts.models import OrganizationAdministrator, ClassroomAdministrator, Student, Teacher, BaseUser
-from accounts.forms import StudentEditForm, TeacherEditForm, TeacherCreateForm, AccountEditForm, StudentEditForTeachersForm
-
-from vocab_trainer.models import StudentContextProgress
-
-import logging
-
-# 削除時のメッセージ用
 from django.contrib import messages
-# リダイレクト用
 from django.urls import reverse
-# nextの安全性確保
 from django.utils.http import url_has_allowed_host_and_scheme
-
-# 教室関連のform
-from ..forms import ClassroomCreateForm, ClassroomEditForm, AssignClassroomForm
-
-# ログアウト
 from django.contrib.auth import logout
-# redirect用
 from django.shortcuts import redirect
+from django.http import HttpResponseNotAllowed, Http404
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import render
+from django.views import View
+from django.shortcuts import get_object_or_404
+
+from accounts.models import Classroom
+from accounts.models import Student, Teacher, BaseUser
+from accounts.forms import StudentEditForm, TeacherEditForm, TeacherCreateForm, AccountEditForm, StudentEditForTeachersForm
+from vocab_trainer.models import StudentContextProgress
+from accounts.forms import ClassroomCreateForm, ClassroomEditForm, AssignClassroomForm
+from accounts.selectors import visible_students_qs, visible_inactive_students_qs
+from vocab_trainer.services.student_availability import has_vocab_progress
 
 # ログ取得
 logger = logging.getLogger(__name__)
-
-# 教材アプリのプロテクトへの対応
-from django.db.models.deletion import ProtectedError
 
 
 class ClassroomCreateView(LoginRequiredMixin, CreateView):
@@ -141,13 +134,14 @@ class ClassroomDetailView(LoginRequiredMixin, DetailView):
         if not role_object or not hasattr(role_object, 'can_manage_classroom') or not role_object.can_manage_classroom(obj):
             raise PermissionDenied("この教室にアクセスする権限がありません。")
         return obj
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # 学年ごとに生徒をグループ化して表示
-        students = self.object.students.order_by('grade')
+        students_qs = visible_students_qs(self.request.user).filter(
+            classrooms=self.object).order_by('grade').distinct()
         grouped_students = {}
-        for student in students:
+        for student in students_qs:
             grouped_students.setdefault(student.get_grade_display(), []).append(student)
         context['grouped_students'] = grouped_students
         return context
@@ -162,16 +156,19 @@ class UnassignedStudentListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role != 'organization_administrator':
+
+        if user.role != "organization_administrator":  # visibleは他ロールにも使えるため、ロールの防御は別途こちらで
+            logger.warning(
+                "未割り当て生徒一覧への不正アクセスを検知しました。",
+                extra={
+                    "user_id": user.id,
+                    "role": getattr(user, "role", None),
+                    "view": "UnassignedStudentListView",
+                },
+            )
             raise PermissionDenied("アクセス権限がありません。")
 
-        org_admin: OrganizationAdministrator = user.get_role_object()
-        if not org_admin:
-            raise PermissionDenied("組織管理者情報が取得できません。")
-
-        # 🔐 管理している組織に属する生徒のみ
-        return Student.objects.filter(
-            organization__in=org_admin.organizations.all(),
+        return visible_students_qs(user).filter(
             classrooms__isnull=True,
             line_user_id__isnull=False,
         )
@@ -185,6 +182,21 @@ class ClassroomAssignmentView(LoginRequiredMixin, FormView):
     form_class = AssignClassroomForm
     success_url = reverse_lazy("organization_admin:unassigned_students")
 
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        if request.user.role != "organization_administrator":
+            logger.warning(
+                "ClassroomAssignmentView への権限外アクセスを検知しました。",
+                extra={
+                    "user_id": request.user.id,
+                    "role": getattr(request.user, "role", None),
+                    "view": "ClassroomAssignmentView",
+                },
+            )
+            raise PermissionDenied("アクセス権限がありません。")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["current_user"] = self.request.user  # 🔑 フォームに管理者情報を渡す
@@ -196,43 +208,26 @@ class ClassroomAssignmentView(LoginRequiredMixin, FormView):
         return super().form_valid(form)
 
 
-
 class StudentDetailView(LoginRequiredMixin, DetailView):
     model = Student
     template_name = 'accounts/organization_admin/student/detail.html'
     context_object_name = 'student'
 
-    def get_object(self, queryset=None):
-        obj = super().get_object(queryset)
-        role_object = self.request.user.get_role_object()
-
-        if not role_object:
+    def get_queryset(self):
+        """
+        詳細を取得しようとするオブジェクトのベースとなるビューを決定する
+        """
+        user = self.request.user
+        if user.role == "student":
             raise PermissionDenied("このページにアクセスする権限がありません。")
-
-        if hasattr(role_object, 'can_manage_classroom'):
-            # 組織管理者・教室管理者が生徒を管理できるかチェック
-            if not any(classroom for classroom in role_object.get_accessible_classrooms() if obj in classroom.students.all()):
-                raise PermissionDenied("この生徒にアクセスする権限がありません。")
-        elif hasattr(role_object, 'students'):
-            # 講師が担当生徒であるかチェック
-            if obj not in role_object.students.all():
-                raise PermissionDenied("この生徒にアクセスする権限がありません。")
-        else:
-            raise PermissionDenied("このページにアクセスする権限がありません。")
-
-        return obj
+        return visible_students_qs(user)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         classroom_id = self.request.GET.get('classroom_id') or self.request.POST.get('classroom_id')
         context['classroom_id'] = classroom_id
         context['reminders'] = self.object.study_reminders.ordered_by_day_and_time()
-        # 長文学習への可否
-        has_vocab_history = StudentContextProgress.objects.filter(
-            student=self.object,
-            total_count__gt=0
-        ).exists()
-        context['has_vocab_history'] = has_vocab_history
+        context['has_vocab_history'] = has_vocab_progress(self.object)
         return context
 
 
@@ -245,22 +240,11 @@ class StudentEditView(LoginRequiredMixin, UpdateView):
         classroom_id = self.request.POST.get('classroom_id') or ''
         return reverse_lazy('organization_admin:student_detail', kwargs={'pk': self.object.pk}) + f'?classroom_id={classroom_id}'
 
-    def get_object(self, queryset=None):
-        # 生徒オブジェクトを取得し、アクセス制限を実施
-        obj = super().get_object(queryset)
+    def get_queryset(self):
         user = self.request.user
-
-        if user.role == 'organization_administrator':
-            organization_admin = OrganizationAdministrator.objects.get(pk=user.pk)
-            if not organization_admin.organizations.filter(classrooms__students=obj).exists():
-                raise PermissionDenied("この生徒を編集する権限がありません。")
-        elif user.role == 'classroom_administrator':
-            classroom_admin = ClassroomAdministrator.objects.get(pk=user.pk)
-            if not classroom_admin.classrooms.filter(students=obj).exists():
-                raise PermissionDenied("この生徒を編集する権限がありません。")
-        else:
+        if user.role in ["student", "teacher"]:
             raise PermissionDenied("このページにアクセスする権限がありません。")
-        return obj
+        return visible_students_qs(user)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -269,13 +253,6 @@ class StudentEditView(LoginRequiredMixin, UpdateView):
         student_id = self.object.id
         context['student_id'] = student_id
         return context
-
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        if form.cleaned_data.get("reset_password"):
-            self.object.set_default_password()
-        messages.success(self.request, f"{self.object.username} の情報を更新しました")
-        return response
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -347,7 +324,15 @@ class StudentEditView(LoginRequiredMixin, UpdateView):
 
 class StudentDeleteView(LoginRequiredMixin, DeleteView):
     model = Student
-    template_name = 'accounts/organization_admin/student/confirm_delete.html'
+
+    def get(self, request, *args, **kwargs):
+        return HttpResponseNotAllowed(['POST'])
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role not in ["organization_administrator", "classroom_administrator"]:
+            raise PermissionDenied("このページにアクセスする権限がありません。")
+        return visible_students_qs(user)
 
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
@@ -361,35 +346,18 @@ class StudentDeleteView(LoginRequiredMixin, DeleteView):
             raise PermissionDenied("このページにアクセスする権限がありません。")
         return obj
 
-    def delete(self, request, *args, **kwargs):
-        """生徒削除時に ProtectedError を握ってユーザ向けメッセージを出す"""
+    def post(self, request, *args, **kwargs):  # post→form_valid→get_success_urlの後ろをカット
         self.object = self.get_object()
         classroom_id = request.POST.get("classroom_id") or request.GET.get("classroom_id")
 
-        try:
-            self.object.delete()
-            messages.success(request, "生徒を削除しました。")
-        except ProtectedError:
-            # created_by=PROTECT に引っかかった場合はこちら
-            messages.error(
-                request,
-                "この生徒が作成した教材が残っているため削除できません。"
-                "先に教材を削除するか、作成者を他のユーザーに変更してください。"
-            )
+        self.object.is_active = False
+        self.object.save(update_fields=["is_active"])
+        messages.success(request, "生徒を無効化しました。")
 
-        # どちらの場合でも、元の画面に戻す
         if classroom_id:
             return redirect("organization_admin:classroom_detail", pk=classroom_id)
         return redirect("organization_admin:classroom_list")
 
-    def get_success_url(self):
-        classroom_id = self.request.POST.get("classroom_id") or self.request.GET.get("classroom_id")
-        messages.success(self.request, "生徒を削除しました。")
-        if classroom_id:
-            return reverse_lazy("organization_admin:classroom_detail", kwargs={"pk": classroom_id})
-        return reverse_lazy("organization_admin:classroom_list")
-
-    
 
 class TeacherDashboardView(LoginRequiredMixin, ListView):
     """
@@ -407,8 +375,8 @@ class TeacherDashboardView(LoginRequiredMixin, ListView):
             raise PermissionDenied("講師のみアクセス可能です。")
 
         # 担当生徒を取得して返す
-        teacher = Teacher.objects.get(pk=user.pk)
-        return teacher.get_students()
+        students_qs = visible_students_qs(user).order_by('-grade')
+        return students_qs
 
 
 class TeacherEditView(LoginRequiredMixin, UpdateView):
@@ -587,3 +555,77 @@ class StudentEditForTeachersView(LoginRequiredMixin, UpdateView):
             self.object.set_default_password()
         messages.success(self.request, f"{self.object.username} の情報を更新しました")
         return response
+
+
+class StudentReactivateView(LoginRequiredMixin, View):
+    model = Student
+    template_name = "accounts/organization_admin/classroom/reactivate_student.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        """
+        POST,GETの両方においてアクセスチェック
+
+        Concerns:
+            - ロールのチェックはget_role_objectで代替可能？可能なら省く
+        """
+        if not request.user.is_authenticated:  # 明示的にログイン画面に流す
+            return self.handle_no_permission()
+        user = request.user
+        if not hasattr(user, "role"):  # ロールが設定されていない場合はアクセス不能
+            raise PermissionDenied("この機能にアクセスする権限がありません。")
+        if user.role not in ["organization_administrator", "classroom_administrator"]:  # 組織管理者か教室管理者以外はアクセス不能
+            raise PermissionDenied("この機能にアクセスする権限がありません。")
+
+        if not hasattr(user, "get_role_object"):  # ロールオブジェクトを持たないユーザーはアクセス不可
+            raise PermissionDenied("この機能にアクセスする権限がありません。")
+        role_object = user.get_role_object()
+        if role_object is None:  # ロールに対応するオブジェクトを持たないユーザーはアクセス不可
+            raise PermissionDenied("この機能にアクセスする権限がありません。")
+        self.classroom_id = kwargs["classroom_id"]  # URLのパスから教室ID取得
+        # classroom = Classroom.objects.get(id=self.classroom_id)
+        classroom = get_object_or_404(Classroom, pk=self.classroom_id)
+        if not hasattr(role_object, 'can_manage_classroom') or not role_object.can_manage_classroom(classroom):  # 判定メソッドが存在しない、あるいは判定が通らない場合はアクセス不可
+            raise PermissionDenied("この教室にアクセスする権限がありません。")
+        return super().dispatch(request, *args, **kwargs)  # 全てのチェックに通ったユーザーのみアクセス可能
+    
+    def get(self, request, *args, **kwargs):  # 非アクティブの生徒一覧をコンテキストで渡してチェックさせる系
+        user = request.user  # dispatchを通っているので確認は不要
+        students = visible_inactive_students_qs(user)  # 非アクティブな生徒を取得
+
+        classroom = get_object_or_404(Classroom, pk=self.classroom_id)
+        if not classroom.can_be_accessed_by(user):
+            raise PermissionDenied("この教室にアクセスする権限がありません。")
+        students = students.filter(classrooms=classroom).order_by('grade')  # 対象の教室に入っている生徒だけ見える
+        if not students.exists():  # 処理の対象となる生徒がいるかの確認
+            messages.warning(request, "対象となる生徒が存在しません。")
+            return redirect("organization_admin:classroom_detail", pk=self.classroom_id)
+        context = {}
+        context["students"] = students
+        context["classroom"] = classroom  #　パンくずリスト用
+        return render(request, self.template_name, context)
+
+    def post(self, request, *args, **kwargs):  # 受け取った生徒IDを復活処理
+        user = request.user
+        student_ids = request.POST.getlist("student_id")  # checkbox一括取得
+        if not student_ids:
+            messages.warning(request, "再アクティブ化したい生徒を選択して下さい。")
+            return redirect("organization_admin:student_reactivate", classroom_id=self.classroom_id)
+        classroom = get_object_or_404(Classroom, pk=self.classroom_id)
+        if not classroom.can_be_accessed_by(user):
+            raise PermissionDenied("この教室にアクセスする権限がありません。")
+        base_qs = visible_inactive_students_qs(user).filter(classrooms=classroom)  # 念のため、対象を絞る
+        for student_id in student_ids:
+            student = base_qs.filter(id=student_id).first()  # エラーを吐かせない
+            if student and (student.is_active == False):  # 生徒が取得できて、なおかつ非アクティブであれば処理
+                student.is_active = True
+                student.save()
+                logger.info(
+                    "生徒を再アクティブ化しました。",
+                    extra = {
+                        "user_id": user.id,
+                        "target_student_id": student.id,
+                        "classroom_id": self.classroom_id,
+                        }
+                    )
+        messages.success(request, "生徒の再アクティブ化を完了しました")
+        return redirect("organization_admin:classroom_detail", pk=self.classroom_id)

@@ -32,7 +32,7 @@ def session_access_check(user: BaseUser, raw_session_id: Optional[str], *, mode:
         )
         raise PermissionDenied("不正なアクセスです。")
 
-    qs = ProblemSession.objects.all()
+    qs = ProblemSession.objects.visible_to(user)  
     if mode:
         qs = qs.filter(mode=mode)
     problem_session = get_object_or_404(qs, pk=raw_session_id)

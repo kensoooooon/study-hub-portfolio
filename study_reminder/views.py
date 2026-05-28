@@ -1,17 +1,12 @@
 from django.http import JsonResponse
 from django.utils.timezone import localtime
 from datetime import timedelta
-from django.db import models
 from .models import StudyReminder
 
 # 管理画面作成用
 from django.views.generic import ListView, UpdateView, DeleteView, CreateView
-from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
 from .forms import StudyReminderCreateForm, StudyReminderEditForm
-
-# 権限用
-from django.shortcuts import render
 
 # リマインダーのアコーディオン表示用
 from accounts.models import Student
@@ -52,10 +47,10 @@ logger = logging.getLogger(__name__)
 
 
 @csrf_exempt
-@require_oidc_token(audience=settings.OIDC_AUDIENCE)
+@require_oidc_token(audience="https://django-study-hub.an.r.appspot.com")
 def process_reminders(request):
     """
-    Google Cloud Schedulerのトリガーポイントでリマインダーを処理（30分単位）
+    Google Cloud Schedulerのトリガーポイントでリマインダーを処理（15分単位）
     """
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
@@ -80,20 +75,25 @@ def process_reminders(request):
     current_day = current_time.strftime('%A').lower()
 
     # 現在の15分スロットに該当するリマインダーを取得
-    reminders = StudyReminder.objects.filter(
+    reminders = StudyReminder.objects.notifiable_in_slot(
         day_of_week=current_day,
-        time_of_day__gte=current_time.time(),
-        time_of_day__lt=next_time.time(),
-        is_active=True
-    ).filter(
-        models.Q(last_notified__lt=current_time.date()) | models.Q(last_notified__isnull=True)
+        start_time=current_time.time(),
+        end_time=next_time.time(),
+        target_date=current_time.date(),
     )
 
-    # リマインダーを処理
     processed_count = 0
     for reminder in reminders:
-        logger.info(f"Processing reminder for student: {reminder.student.username}, LINE ID: {reminder.student.line_user_id}")
-        reminder.send_notification()
+        logger.info(
+            "Processing reminder for student: %s, LINE ID: %s",
+            reminder.student.username,
+            reminder.student.line_user_id,
+        )
+
+        sent = reminder.send_notification()
+        if not sent:
+            continue
+
         reminder.last_notified = current_time.date()
         reminder.save(update_fields=["last_notified"])
         processed_count += 1
@@ -131,6 +131,11 @@ class ReminderEditView(LoginRequiredMixin, UpdateView):
         if not obj.can_be_accessed_by(self.request.user):
             raise PermissionDenied("このリマインダーへのアクセス権がありません。")
         return obj
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['student'] = self.object.student
+        return kwargs
 
     def get_success_url(self):
         next_url = self.request.GET.get('next')
@@ -218,20 +223,33 @@ class ReminderCreateView(LoginRequiredMixin, CreateView):
     form_class = StudyReminderCreateForm
     template_name = 'study_reminder/reminder_create.html'
 
-    def form_valid(self, form):
-        user = self.request.user   
+    def get_target_student(self):
+        if hasattr(self, "_target_student"):
+            return self._target_student
         raw_student_id = self.request.GET.get("student")
+        self._target_student = student_access_check(self.request.user, raw_student_id)
+        return self._target_student
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        kwargs['student'] = self.get_target_student()
+        return kwargs
+
+    def form_valid(self, form):
         try:
-            student = student_access_check(user, raw_student_id)
+            student = self.get_target_student()
         except PermissionDenied:
-            # 403にする（ここを握りつぶさない）
             raise
         except Http404:
             form.add_error(None, "指定された生徒が存在しません。")
             return self.form_invalid(form)
         except Exception:
-            logger.exception("生徒の取得中に想定外エラー (user.id=%s, raw_student_id=%s)", getattr(user, "id", None), raw_student_id)
+            logger.exception(
+                "生徒の取得中に想定外エラー (user.id=%s, raw_student_id=%s)",
+                getattr(self.request.user, "id", None),
+                self.request.GET.get("student"),
+            )
             form.add_error(None, "エラーが発生しました。もう一度お試しください。")
             return self.form_invalid(form)
 
@@ -240,14 +258,6 @@ class ReminderCreateView(LoginRequiredMixin, CreateView):
 
     def form_invalid(self, form):
         return super().form_invalid(form)
-
-    def get_form_kwargs(self):
-        """
-        フォームにユーザー情報を渡す。
-        """
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
 
     def get_success_url(self):
         next_url = self.request.GET.get('next') or self.request.POST.get('next')
@@ -291,6 +301,7 @@ class StudentListView(LoginRequiredMixin, ListView):
         # 各生徒にぶら下げるリマインダーは、必ず filter_by_access 経由で取得
         reminder_qs = StudyReminder.objects.filter_by_access(user)
 
+        base_qs = Student.objects.active()
         # ◆ 組織管理者
         if role == 'organization_administrator':
             # OrganizationAdministrator.organizations (M2M)
@@ -299,7 +310,7 @@ class StudentListView(LoginRequiredMixin, ListView):
                 return Student.objects.none()
 
             return (
-                Student.objects
+                base_qs
                 .filter(organization__in=orgs)
                 .prefetch_related(
                     Prefetch('study_reminders', queryset=reminder_qs)
@@ -311,7 +322,7 @@ class StudentListView(LoginRequiredMixin, ListView):
         elif role == 'classroom_administrator':
             # ClassroomAdministrator.classrooms / organization
             classrooms = role_obj.classrooms.all()
-            qs = Student.objects.filter(classrooms__in=classrooms).distinct()
+            qs = base_qs.filter(classrooms__in=classrooms).distinct()
 
             if role_obj.organization:
                 qs = qs.filter(organization=role_obj.organization)
@@ -323,7 +334,7 @@ class StudentListView(LoginRequiredMixin, ListView):
         # ◆ 講師
         elif role == 'teacher':
             # Student.teachers は Teacher モデル向けなので teachers=role_obj の方が素直
-            qs = Student.objects.filter(teachers=role_obj).distinct()
+            qs = base_qs.filter(teachers=role_obj).distinct()
 
             if getattr(role_obj, "organization", None):
                 qs = qs.filter(organization=role_obj.organization)

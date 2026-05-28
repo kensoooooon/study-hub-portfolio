@@ -1,5 +1,5 @@
 from django.db import models
-from chem_trainer.models import Element, ElementalSubstance, Compound, ChemicalEquation
+# from chem_trainer.models import Element, ElementalSubstance, Compound, ChemicalEquation
 
 
 class BaseDifficulty(models.Model):
@@ -29,13 +29,13 @@ class BaseDifficulty(models.Model):
         self.save()
 
 class ElementDifficulty(BaseDifficulty):
-    element = models.OneToOneField(Element, on_delete=models.CASCADE, related_name='element_difficulty')
+    element = models.OneToOneField("chem_trainer.Element", on_delete=models.CASCADE, related_name='element_difficulty')
 
 class SubstanceDifficulty(BaseDifficulty):
-    substance = models.OneToOneField(ElementalSubstance, on_delete=models.CASCADE, related_name='substance_difficulty')
+    substance = models.OneToOneField("chem_trainer.ElementalSubstance", on_delete=models.CASCADE, related_name='substance_difficulty')
 
 class CompoundDifficulty(BaseDifficulty):
-    compound = models.OneToOneField(Compound, on_delete=models.CASCADE, related_name='compound_difficulty')
+    compound = models.OneToOneField("chem_trainer.Compound", on_delete=models.CASCADE, related_name='compound_difficulty')
 
 class EquationDifficulty(BaseDifficulty):
-    chemical_equation = models.OneToOneField(ChemicalEquation, on_delete=models.CASCADE, related_name='equation_difficulty')
+    chemical_equation = models.OneToOneField("chem_trainer.ChemicalEquation", on_delete=models.CASCADE, related_name='equation_difficulty')

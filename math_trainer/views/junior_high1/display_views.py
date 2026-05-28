@@ -1,33 +1,27 @@
 from django.views.generic import TemplateView
 
 from django.views import View
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_GET
 
 from math_trainer.utils import problem_generator, shape_two_columns
 
-from math_trainer.models import GradeChoices, ProblemSession, ProblemInstance
+from math_trainer.models import GradeChoices, ProblemInstance
 
 from math_trainer.math_process import junior_high1
 
 from django.contrib import messages
 
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
-
 from math_trainer.utils.student_access_check import student_access_check
 from math_trainer.utils.session_access_check import session_access_check
 from math_trainer.utils.build_url import build_url
 
-from django.core.exceptions import PermissionDenied
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-from math_trainer.utils.get_int import get_allowed_int_from_post, get_allowed_int_from_session
-from math_trainer.constraints import ALLOWED_PAPER_NUMBERS
 
 
 def redirect_to_junior_high1_problem_select(request, *, student_id: str, classroom_id: str, msg: str):
@@ -48,42 +42,57 @@ def redirect_to_junior_high1_problem_select(request, *, student_id: str, classro
 
 
 
-class JuniorHigh1DisplayDispatcherView(LoginRequiredMixin, View):
+class JuniorHigh1DisplayDispatcherView(View):
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
+
     def post(self, request):
         user = request.user
         raw_student_id = request.POST.get("student_id", "")
         student = student_access_check(user, raw_student_id)
         student_id = student.id
         classroom_id = request.POST.get("classroom_id", "")
-        
-        problem_types = request.POST.getlist("problem_type")
-        if not problem_types:
-            error_message = "最低1つの問題タイプを選択してください。"
-            return redirect_to_junior_high1_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
-        request.session["problem_types"] = problem_types
-        
-        numbers_to_use = request.POST.getlist("number_to_use")
-        if not numbers_to_use:
-            error_message = "最低1つの使用する係数を選択してください。"
-            return redirect_to_junior_high1_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
-        request.session["numbers_to_use"] = numbers_to_use
 
         category = request.POST.get("problem_category")
-        # 適宜問題タイプを追加する
+        if not category:
+            error_message = "最低1つの問題カテゴリを選択して下さい。"
+            return redirect_to_junior_high1_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
+        if category not in ["specific_linear_equation"]:
+            error_message = "想定されていないカテゴリが選択されました。"
+            return redirect_to_junior_high1_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
         if category == "specific_linear_equation":
+            problem_types = request.POST.getlist("problem_type")
+            if not problem_types:
+                error_message = "最低1つの問題タイプを選択してください。"
+                return redirect_to_junior_high1_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
+            numbers_to_use = request.POST.getlist("number_to_use")
+            if not numbers_to_use:
+                error_message = "最低1つの使用する係数を選択してください。"
+                return redirect_to_junior_high1_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
+            request.session["problem_types"] = problem_types
+            request.session["numbers_to_use"] = numbers_to_use
+
             base_url = reverse('math_trainer:junior_high1:specific_linear_equation_display')
             url = build_url(base_url, student_id, classroom_id)
             return redirect(url)
-        else:
-            return render(request, "math_trainer/common/no_category.html")
+        
+        error_message = "想定していない動作です。管理者にお知らせ下さい。"
+        return redirect_to_junior_high1_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
 
 
-class SpecificLinearEquationDisplayView(LoginRequiredMixin, TemplateView):
+class SpecificLinearEquationDisplayView(TemplateView):
     """
     特定の形の1次方程式を解く問題の作成、および採点
     """
     template_name = "math_trainer/junior_high1/specific_linear_equation/for_display.html"
     
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request):
         """
         クイズ画面の表示
@@ -189,9 +198,10 @@ class SpecificLinearEquationDisplayView(LoginRequiredMixin, TemplateView):
         return redirect(url)
     
 
-@login_required
 @require_GET
 def specific_linear_equation_result_view(request):
+    if not request.user.is_authenticated:
+        return redirect("accounts_auth:login")
     data = request.session.pop("math_quiz_result", None)
     if not data:
         classroom_id = request.GET.get("classroom_id")

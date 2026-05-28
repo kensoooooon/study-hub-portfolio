@@ -48,6 +48,21 @@
             {{ form.custom_message.label_tag }}
             {{ form.custom_message }}
         </div>
+        <div class="mb-3">
+            {{ form.learning_link_destination.label_tag }}
+            {{ form.learning_link_destination }}
+            {% if form.learning_link_destination.help_text %}
+                <div class="form-text">{{ form.learning_link_destination.help_text }}</div>
+            {% endif %}
+            {% for error in form.learning_link_destination.errors %}
+                <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+            </div>
+        {% endif %}
         <div class="d-flex justify-content-between">
             <button type="submit" class="btn btn-success">保存</button>
             <a href="{{ request.GET.next }}" class="btn btn-secondary">キャンセル</a>

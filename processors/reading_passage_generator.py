@@ -13,6 +13,7 @@ Note:
 import openai
 import json
 from django.conf import settings
+from processors.openai_models import OpenAIModel
 from accounts.models import Student
 from vocab_trainer.models import WordMeaningContext, StudentContextProgress
 from read_trainer.models import ReadingPassage
@@ -102,12 +103,12 @@ class ReadingPassageGenerator:
 
         try:
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=OpenAIModel.PASSAGE_GENERATION,
                 messages=[
                     {"role": "system", "content": f"あなたは英語教育用の教材作成アシスタントです。{level_prompt}"},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=4096,
+                max_completion_tokens=4096,
                 temperature=0.5
             )
         except Exception:
@@ -116,7 +117,7 @@ class ReadingPassageGenerator:
                 self.student.id, len(vocab_contexts)
             )
             raise
-        
+
         content = response.choices[0].message.content.strip()
         logger.debug("Raw response received (length=%d)", len(content))
         parsed = self._parse_response(content)
@@ -159,12 +160,12 @@ class ReadingPassageGenerator:
 
         try:
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=OpenAIModel.PASSAGE_GENERATION,
                 messages=[
                     {"role": "system", "content": f"あなたは英語教材を作成するアシスタントです。{level_prompt}"},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=4096,
+                max_completion_tokens=4096,
                 temperature=0.7
             )
         except Exception:
@@ -431,7 +432,7 @@ class EikenPassageGenerator:
         
         try:
             res = self.client.chat.completions.create(
-                model="gpt-4o", messages=messages, max_tokens=4096
+                model=OpenAIModel.PASSAGE_GENERATION, messages=messages, max_completion_tokens=4096
             )
         except Exception as e:
             logger.exception(
@@ -481,7 +482,7 @@ class EikenPassageGenerator:
         )
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o", messages=messages, max_tokens=2048
+                model=OpenAIModel.PASSAGE_GENERATION, messages=messages, max_completion_tokens=2048
             )
             content = response.choices[0].message.content
         except Exception:

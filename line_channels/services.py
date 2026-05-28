@@ -5,9 +5,11 @@
 """
 
 from django.db import transaction
-from .models import LineChannel, LineChannelKeyBundle, KeyKind
 from .crypto import generate_dek, encrypt_with_dek, wrap_dek_with_kms, unwrap_dek_with_kms, decrypt_with_dek
 from django.utils import timezone
+
+from line_channels.models import LineChannel, LineChannelKeyBundle, KeyKind
+
 
 @transaction.atomic
 def old_store_secret(line_channel, kind: KeyKind, plaintext: bytes) -> LineChannelKeyBundle:  # いきなり消すのは怖いので、old型で残す2026/1/19

@@ -17,5 +17,5 @@ class Command(BaseCommand):
         count = textbooks.update(publication_year=year)
 
         self.stdout.write(self.style.SUCCESS(
-            f"✅ {count} 件の教科書に発行年 {year} を設定しました（シリーズ名: {name}）"
+            f"✅ {count} 件の教科書に発行年 {year} を設定しました（シリーズ名: {name}、無効教材を含む）"  # 無効教材にも一応設定はさせる
         ))

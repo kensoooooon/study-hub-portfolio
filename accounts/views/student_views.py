@@ -1,22 +1,22 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
-from accounts.models import Student
-from vocab_trainer.models import StudentContextProgress
 
+from vocab_trainer.models import StudentContextProgress
+from vocab_trainer.services.student_availability import has_vocab_progress
 from chem_trainer.models import StudentSubstanceProgress, StudentCompoundProgress, StudentEquationProgress
+from accounts.selectors import get_visible_self_student
 
 
 @login_required
 def student_home(request):
     """ 生徒のホームページ """
-    # ログインユーザーが Student であることを確認
-    try:
-        student = Student.objects.get(pk=request.user.pk)
-    except Student.DoesNotExist:
+    student = get_visible_self_student(request.user)
+    if student is None:
         return redirect('accounts_auth:login')
 
     context = {
-        'student': student
+        'student': student,
+        'has_vocab_progress': has_vocab_progress(student),  # 進捗が1件以上存在するか
     }
     return render(request, 'accounts/student/home.html', context)
 
@@ -24,21 +24,10 @@ def student_home(request):
 @login_required
 def study_english_history(request):
     """ 優先度の高い順に 10 件の復習カードを表示 """
-    student = Student.objects.get(pk=request.user.pk)
+    student = get_visible_self_student(request.user)
+    if student is None:
+        return redirect('accounts_auth:login')
 
-    # ✅ 復習優先度の高い順に 10 個を取得
-    word_progresses = StudentContextProgress.objects.filter(student=student).order_by('-review_priority')[:10]
-    context = {
-        'student': student,
-        'word_progresses': word_progresses,
-    }
-    return render(request, 'accounts/student/english_history.html', context)
-
-
-@login_required
-def study_english_history(request):
-    """ 優先度の高い順に 10 件の復習カードを表示 """
-    student = Student.objects.get(pk=request.user.pk)
 
     progresses = StudentContextProgress.objects.filter(student=student)
     if student.textbook:
@@ -57,7 +46,9 @@ def study_english_history(request):
 @login_required
 def study_chemical_history(request):
     """ 優先度の高い順に 10 件の復習カードを表示 """
-    student = Student.objects.get(pk=request.user.pk)
+    student = get_visible_self_student(request.user)
+    if student is None:
+        return redirect('accounts_auth:login')
 
     # ✅ 単体, 化合物, 化学式を復習優先度の高い順に 10 件ずつ取得
     substance_progresses = list(StudentSubstanceProgress.objects.filter(student=student).order_by('-review_priority')[:10])

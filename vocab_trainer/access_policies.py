@@ -64,7 +64,7 @@ def _safe_role_obj(user: BaseUser, role: str, expected_type: Type[T]) -> Optiona
 
 def visible_students_qs(user: BaseUser, base_qs: QuerySet[Student] | None = None) -> QuerySet[Student]:
     qs = base_qs if base_qs is not None else Student.objects.all()
-
+    qs = qs.filter(is_active=True)
     if not getattr(user, "is_active", False):
         return qs.none()
 

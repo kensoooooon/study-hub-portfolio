@@ -80,6 +80,10 @@
 </table>
 
 <a href="{% url 'organization_admin:teacher_add' %}?next={{ request.get_full_path }}" class="btn btn-success mt-3">新規講師作成</a>
+
+{% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
+    <a href="{% url 'organization_admin:student_reactivate' classroom.pk %}" class="btn btn-success mt-3">非アクティブにした生徒を復帰させる</a>
+{% endif %}
 {% endblock %}
 
 

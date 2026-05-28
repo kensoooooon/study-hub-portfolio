@@ -1,5 +1,6 @@
 import openai
 from django.conf import settings
+from processors.openai_models import OpenAIModel
 
 # ログ出力用
 import logging
@@ -33,25 +34,50 @@ class ExampleSentenceProcessor:
             str: 生成された例文
         """
         try:
-            # プロンプトの設定
-            prompt = (
-                f"次の英単語とそれに対応する日本語訳を使用して、中学生程度のシンプルな英文を作成してください。\n"
-                f"英単語: {word}\n"
-                f"対応する日本語: {japanese_meaning}\n"
-                f"品詞: {part_of_speech}\n"
-                f"解答には和訳の文章も併せてつけてください。\n"
-                f"また、単語の覚え方や覚えておくべき知識もあれば、併せてつけてください。"
+            system_prompt = (
+                "あなたは英単語クイズの解答画面に表示する解説文を生成するシステムです。"
+                "出力はそのまま画面に表示されます。"
+                "ユーザーとの会話は行わず、呼びかけ・前置き・確認・追加提案を書いてはいけません。"
+                "Markdownの見出し、箇条書き、区切り線、太字記法は使わないでください。"
+                "指定された形式だけで、簡潔な日本語で出力してください。"
             )
+
+            prompt = f"""
+            次の英単語について、中学生向けの解説を作成してください。
+
+            英単語: {word}
+            対応する日本語: {japanese_meaning}
+            品詞: {part_of_speech}
+
+            必ず次の形式だけで出力してください。
+
+            "<英単語を自然に使った中学生程度の英文を1文>"
+            和訳: "<上の英文の自然な日本語訳>"
+
+            覚え方:
+            <単語の意味やつづりを覚えるための説明を1〜2文>
+
+            覚えておくべき知識:
+            <この単語の基本的な使い方、よく使う形、注意点を1〜3文>
+
+            禁止事項:
+            - 「もちろんです」などの前置きを書かない
+            - 「必要なら」「どうしますか」などの呼びかけを書かない
+            - 追加の例文を出さない
+            - Markdown記法を使わない
+            - 箇条書きを使わない
+            - 指定形式以外の見出しを増やさない
+            """
 
             # ChatGPTにリクエスト
             response = self.openai_client.chat.completions.create(
-                model="gpt-4",
+                model=OpenAIModel.SHORT_TASK,
                 messages=[
-                    {"role": "system", "content": "あなたは親切な学習アシスタントです。標準的な中学生を対象としたシンプルな解答を心がけてみてください。"},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
                 ],
-                max_tokens=1000,
-                temperature=0.5
+                max_completion_tokens=1000,
+                temperature=0.3
             )
             text = response.choices[0].message.content.strip()
             logger.debug(

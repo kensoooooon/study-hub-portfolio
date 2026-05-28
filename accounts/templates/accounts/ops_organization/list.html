@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}管理組織一覧{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item active" aria-current="page">管理組織一覧</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1>管理組織一覧</h1>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>組織名</th>
+            <th>現在のアクティブな生徒数</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for organization in organizations %}
+        <tr>
+            <td>{{ organization.name }}</td>
+            <td>{{ organization.active_student_count }}人</td>
+            <td><a href="{% url 'ops_organization:detail' organization.id %}" class="btn btn-sm btn-info">詳細を見る</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if perms.accounts.add_organization %}
+    <a href="{% url 'ops_organization:create' %}" class="btn btn-success mt-3">新規組織作成</a>
+{% endif %}
+
+{% endblock %}

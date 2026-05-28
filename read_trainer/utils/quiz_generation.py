@@ -13,14 +13,11 @@ from __future__ import annotations
 
 - append_questions_to_existing_passage
     与えられた既存の長文に対し、新たな問題を作成。バッチIDはすでに紐づいたIDよりも1だけ大きいものを設定
-
-- select_latest_existing_passage_and_batch
-    ランダムに長文を選び、その中での最新のバッチIDが付与された問題を通す
 """
+from django.db import transaction
+
 from read_trainer.models import ReadingPassage, ReadingQuestion
 from processors.reading_passage_generator import ReadingPassageGenerator, EikenPassageGenerator
-
-# 型アノテーション用
 from accounts.models import Student
 from vocab_trainer.models import WordMeaningContext
 
@@ -31,6 +28,7 @@ logger = logging.getLogger(__name__)
 valid_choices = {"A", "B", "C", "D"}
 
 
+@transaction.atomic
 def generate_and_save_passage_with_questions(student: Student, vocab_contexts: list[WordMeaningContext]) -> tuple[ReadingPassage, int]:
     """
     学習済み語彙情報から長文と問題（questions）を新規生成し、DB に保存する。
@@ -85,12 +83,13 @@ def generate_and_save_passage_with_questions(student: Student, vocab_contexts: l
                 batch_id=batch_id,
             )
     except Exception:
-        logger.exception("問題の登録に失敗: (ListeningQuestion: %s)", q)
+        logger.exception("問題の登録に失敗: (ReadingQuestion: %s)", q)
         raise  # 上位に通知してエラーページ遷移へ
 
     return passage, batch_id
 
 
+@transaction.atomic
 def append_questions_to_existing_passage(student: Student, passage: ReadingPassage, vocab_contexts: list[WordMeaningContext]) -> tuple[ReadingPassage, int]:
     """
     既存の長文 (passage) に新しい問題を追加し、新しい batch_id を自動採番して保存する。
@@ -142,30 +141,10 @@ def append_questions_to_existing_passage(student: Student, passage: ReadingPassa
                 batch_id=next_batch,
             )
     except Exception:
-        logger.exception(f"問題の登録に失敗: {q}")
+        logger.exception("問題の登録に失敗: (ReadingQuestion: %s)", q)
         raise  # 上位に通知してエラーページ遷移へ
 
     return passage, next_batch
-
-
-def select_latest_existing_passage_and_batch(student: Student) -> tuple[ReadingPassage | None, int | None]:
-    """
-    指定された生徒の既存長文の中からランダムに1つ選び、
-    その長文に紐づく最新（最大）の batch_id を取得する。
-
-    Args:
-        student: 対象となる生徒。
-
-    Returns:
-        (passage, latest_batch_id):
-            passage: 見つかった ReadingPassage。存在しない場合は None。
-            latest_batch_id: その passage に紐づく最新 batch_id。存在しない場合は None。
-    """
-    passage = ReadingPassage.objects.filter(created_by=student).order_by('?').first()
-    if passage is None:
-        return None, None
-    latest_batch = passage.questions.order_by('-batch_id').first().batch_id
-    return passage, latest_batch
 
 
 def get_latest_batch_for_passage(passage: ReadingPassage) -> int | None:
@@ -182,6 +161,7 @@ def get_latest_batch_for_passage(passage: ReadingPassage) -> int | None:
     return latest.batch_id if latest else None
 
 
+@transaction.atomic
 def generate_eiken_passage_with_questions(student: Student, level: str, vocab_contexts: list[WordMeaningContext] | None = None,) -> tuple[ReadingPassage, int]:
     """
     英検用の新規長文と問題を生成し、保存する。
@@ -239,7 +219,7 @@ def generate_eiken_passage_with_questions(student: Student, level: str, vocab_co
     return passage, batch_id
 
 
-
+@transaction.atomic
 def append_questions_to_existing_eiken_passage(student: Student, passage: ReadingPassage, level: str, vocab_contexts: list[WordMeaningContext] | None = None,) -> tuple[ReadingPassage, int]:
     """
     既存の英検用長文に対して、新しい問題を追加する。

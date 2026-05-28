@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}組織管理者割当{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'ops_organization:list' %}">組織一覧</a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{% url 'ops_organization:detail' org_id %}">組織詳細</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">組織管理者割当</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<div class="container mt-4">
+    <form method="post" action="?">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <fieldset>
+            <legend>{{ org_name }} 管理者割当</legend>
+            {{ form.admins.errors }}
+            {{ form.admins }}
+        </fieldset>
+        {% if has_candidates %}
+            <button type="submit" class="btn btn-primary" id="confirmBtn">実行</button>
+        {% else %}
+            <button type="submit" class="btn btn-primary" id="confirmBtn" disabled>割り当てられる組織管理者が存在しません。</button>
+        {% endif %}
+    </form>
+</div>
+
+<a href="{% url 'ops_organization:detail' org_id %}" class="btn btn-secondary mt-2">戻る</a>
+{% endblock %}
+
+{% block script %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('confirmBtn');
+            if (!btn) return;
+            const form = btn.closest('form');
+            if (!form) return;
+            form.addEventListener('submit', () => { btn.disabled = true; });
+        });
+    </script>
+{% endblock %}

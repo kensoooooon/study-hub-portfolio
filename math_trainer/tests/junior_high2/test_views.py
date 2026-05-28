@@ -326,3 +326,66 @@ class JuniorHigh2AllViewsTests(TestCase):
         self.assertEqual(res.status_code, 302)
         # ここは index へ戻る仕様だが、index 側の build_url 実装差分に影響されやすいので、最低限の検証に留める
         self.assertIn(reverse("math_trainer:index"), res["Location"])
+
+    # -------------------------
+    # display dispatcher: カテゴリ検証
+    # -------------------------
+    @patch(f"{JH2_DISPLAY}.student_access_check")
+    def test_display_dispatcher_missing_category_redirects(self, mock_access):
+        """problem_category 未送信は problem_select へリダイレクト"""
+        mock_access.return_value = self.student
+        res = self._post_display_dispatcher(problem_category="")
+
+        expected = f"{self.url_problem_select}?student_id={self.student_id}&classroom_id={self.classroom_id}"
+        self.assertRedirects(res, expected, fetch_redirect_response=False)
+
+    @patch(f"{JH2_DISPLAY}.student_access_check")
+    def test_display_dispatcher_invalid_category_redirects(self, mock_access):
+        """想定外カテゴリは problem_select へリダイレクト"""
+        mock_access.return_value = self.student
+        res = self._post_display_dispatcher(problem_category="invalid_category")
+
+        expected = f"{self.url_problem_select}?student_id={self.student_id}&classroom_id={self.classroom_id}"
+        self.assertRedirects(res, expected, fetch_redirect_response=False)
+
+    # -------------------------
+    # print dispatcher: カテゴリ検証
+    # -------------------------
+    @patch(f"{JH2_PRINT}.student_access_check")
+    def test_print_dispatcher_missing_category_redirects(self, mock_access):
+        """problem_category 未送信は problem_select へリダイレクト"""
+        mock_access.return_value = self.student
+        res = self._post_print_dispatcher(problem_category="")
+
+        expected = f"{self.url_problem_select}?student_id={self.student_id}&classroom_id={self.classroom_id}"
+        self.assertRedirects(res, expected, fetch_redirect_response=False)
+
+    @patch(f"{JH2_PRINT}.student_access_check")
+    def test_print_dispatcher_invalid_category_redirects(self, mock_access):
+        """想定外カテゴリは problem_select へリダイレクト"""
+        mock_access.return_value = self.student
+        res = self._post_print_dispatcher(problem_category="invalid_category")
+
+        expected = f"{self.url_problem_select}?student_id={self.student_id}&classroom_id={self.classroom_id}"
+        self.assertRedirects(res, expected, fetch_redirect_response=False)
+
+    # -------------------------
+    # display view GET: セッション欠落
+    # -------------------------
+    @patch(f"{JH2_DISPLAY}.student_access_check")
+    def test_simul_display_missing_session_redirects(self, mock_access):
+        """セッションに equation_types/used_coefficients/answer_types がない場合、problem_select へリダイレクト"""
+        mock_access.return_value = self.student
+
+        s = self.client.session
+        for k in ("equation_types", "used_coefficients", "answer_types"):
+            s.pop(k, None)
+        s.save()
+
+        res = self.client.get(
+            self.url_simul_display,
+            data={"student_id": self.student_id, "classroom_id": self.classroom_id},
+        )
+
+        expected = f"{self.url_problem_select}?student_id={self.student_id}&classroom_id={self.classroom_id}"
+        self.assertRedirects(res, expected, fetch_redirect_response=False)

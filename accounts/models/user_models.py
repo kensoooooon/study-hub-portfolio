@@ -7,7 +7,6 @@
     
 """
 import uuid
-from typing import Optional
 
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
@@ -17,6 +16,7 @@ from django.conf import settings
 
 
 from .organization_models import Classroom, Organization
+from accounts.services.normalize_email import normalize_email
 
 
 
@@ -29,7 +29,7 @@ class BaseUserManager(BaseUserManager):
         if not email and 'role' in extra_fields and extra_fields['role'] != 'student':
             raise ValueError("メールアドレスは生徒以外には必須です")
         if email:
-            email = self.normalize_email(email)
+            email = normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -84,7 +84,7 @@ class BaseUser(AbstractBaseUser, PermissionsMixin):
             raise ValidationError("ユーザーの役割が設定されていません")
         if self.role != 'student' and not self.email:
             raise ValidationError(f"{self.get_role_display()}にはメールアドレスが必要です")
-        self.email = self._normalize_email(self.email)
+        self.email = normalize_email(self.email)
 
     def __str__(self):
         return self.username or "未登録"
@@ -103,37 +103,46 @@ class BaseUser(AbstractBaseUser, PermissionsMixin):
         if related_name:
             return getattr(self, related_name, None)
         return None
-    
-    def _normalize_email(self, email: str | None ) -> str | None:
-        """メールアドレスをすべて小文字にする正規化を実施するための関数
-
-        Args:
-            email (str | None): 対象となるメールアドレス
-
-        Returns:
-            str | None: 正規化されたメールアドレス
-        """
-        if email is None:
-            return None
-        
-        if not isinstance(email, str):
-            return None
-        
-        stripped_email = email.strip()
-        if stripped_email == "":
-            return ""
-        
-        return stripped_email.lower()
 
     def save(self, *args, **kwargs):
-        self.email = self._normalize_email(self.email)
+        self.email = normalize_email(self.email)
         super().save(*args, **kwargs)
 
+
+class StudentQuerySet(models.QuerySet):
+    """
+    アクティブ、非アクティブそれぞれを返すためのヘルパー
+    """
+    def active(self):
+        return self.filter(is_active=True)
+
+    def inactive(self):
+        return self.filter(is_active=False)
 
 class StudentManager(BaseUserManager):
     """
     生徒専用のマネージャークラス
     """
+    def get_queryset(self):
+        """
+        上のクエリセットを仲介する
+        """
+        return StudentQuerySet(self.model, using=self._db)
+    
+    def active(self):
+        """
+        アクティブなもののみ返す
+
+        -> Student.objects.active()が使えるように
+        """
+        return self.get_queryset().active()
+
+    def inactive(self):
+        """
+        非アクティブなもののみ返す
+        """
+        return  self.get_queryset().inactive()
+
     def get_or_create_user(self, line_user_id, **extra_fields):
         """
         LINEユーザーIDをもとに生徒を取得または作成
@@ -230,7 +239,7 @@ class Student(BaseUser):
         default_password = settings.STUDENT_DEFAULT_PASSWORD  # settings.py の値を取得
         self.set_password(default_password)  # 適宜変更
         self.is_first_login = True  # ⭐ 初回ログイン状態に戻す
-        self.save()
+        self.save(update_fields=["password", "is_first_login"])
 
     def clean(self):
         """
@@ -296,9 +305,14 @@ class Teacher(BaseUser):
 
     def get_students(self):
         """
-        担当生徒一覧を取得するメソッド
+        担当生徒一覧かつ自身と同じ組織に所属している生徒を取得するメソッド
         """
-        return self.students.order_by('grade')
+        if self.organization_id is None:
+            return self.students.none()
+        return self.students.filter(
+            is_active=True,
+            organization=self.organization,
+        ).order_by('grade')
 
     def can_be_accessed_by(self, user):
         """
@@ -386,6 +400,8 @@ class ClassroomAdministrator(BaseUser):
         """
         特定の生徒に対して、その教室管理者が管理している教室に所属していて管理対象なのかをチェック
         """
+        if not student.is_active:
+            return False
         return self.get_accessible_classrooms().filter(students=student).exists()
 
 
@@ -397,6 +413,11 @@ class OrganizationAdministrator(BaseUser):
     organizations = models.ManyToManyField(
         Organization, related_name='administrators', blank=True, verbose_name="管理組織"
     )
+
+    class Meta:
+        permissions = [  # 独自権限の設定
+            ("view_all_organization_administrators", "Can view all organization administrators"),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.role:
@@ -425,9 +446,11 @@ class OrganizationAdministrator(BaseUser):
         """
         特定の生徒に対して、それが自身の組織の教室に所属している管理対象であるかをチェック
         """
-        # 1) 組織が確定している生徒は organization で判定（推奨）
+        if not student.is_active:
+            return False
+        # 組織が確定している生徒は organization で判定（推奨）
         if student.organization_id:
             return self.organizations.filter(id=student.organization_id).exists()
 
-        # 2) フォールバック：教室経由（既存ロジック）
+        # ォールバック：教室経由（既存ロジック）
         return self.get_accessible_classrooms().filter(students=student).exists()

@@ -48,9 +48,9 @@
         <!-- 左側: 復習クイズへのリンク -->
         <div class="col-md-3">
             <h2>復習クイズ</h2>
-            <a href="{% url 'chem_trainer:review_quiz' %}" class="btn btn-primary w-100 mb-3">
-                復習クイズを始める
-            </a>
+            <button class="btn btn-secondary w-100 mb-3" disabled>
+                復習クイズは現在停止中です
+            </button>
         </div>
 
         <!-- 右側: 学習した英単語一覧 -->
@@ -67,11 +67,8 @@
                                 <p>優先度: {{ progress.review_priority|floatformat:2 }}</p>
 
                                 <!-- ✅ 確認学習ボタン -->
-                                <button class="btn btn-primary study-button"
-                                data-url="{% url 'chem_trainer:study_card' %}"
-                                data-id="{{ progress.get_relation_id }}"
-                                data-type="{{ progress.get_relation_type }}">
-                                    確認学習
+                                <button class="btn btn-secondary" disabled>
+                                    確認学習は現在停止中です
                                 </button>
 
                                 <!-- ✅ ロード中の表示を追加 -->

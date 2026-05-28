@@ -8,6 +8,7 @@ from accounts.views import AccountEditView
 from accounts.views import StudentEditForTeachersView
 
 from accounts.views import StudentDeleteView
+from accounts.views import StudentReactivateView
 
 app_name = 'organization_admin'
 
@@ -28,4 +29,5 @@ urlpatterns = [
     path('account/edit/', AccountEditView.as_view(), name='account_edit'),  # 自身のアカウント編集用
     path('students/<uuid:pk>/edit_for_teachers/', StudentEditForTeachersView.as_view(), name='student_edit_for_teachers'),  # 講師用の教科書とメルアド編集用
     path('students/<uuid:pk>/delete/', StudentDeleteView.as_view(), name='student_delete'),
+    path('classrooms/<int:classroom_id>/reactivate_students/', StudentReactivateView.as_view(), name='student_reactivate'),  # 教室単位で生徒を最アクティブさせる
 ]

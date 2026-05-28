@@ -99,7 +99,8 @@
     <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
     
     <button type="submit"
-        class="btn 
+        {% if not student.textbook %}disabled{% endif %}
+        class="btn
             {% if review_level == 'very_high' %} btn-danger
             {% elif review_level == 'high' %} btn-warning
             {% elif review_level == 'medium' %} btn-info

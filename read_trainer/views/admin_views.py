@@ -17,16 +17,15 @@ Post-Redirect-Get パターン（PRG）に基づき、
     渡されたpassage_idとbatch_idから、問題と選択肢の生成、および解答画面の処理を行う
 """
 
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, redirect
 from django.views import View
-
-from read_trainer.models import ReadingPassage
-from vocab_trainer.models import StudentContextProgress
-from accounts.models import Student
-
-from django.contrib.auth.decorators import login_required, user_passes_test
 from django.urls import reverse
+from django.views.decorators.http import require_GET
+from django.utils import timezone
+from django.core.exceptions import PermissionDenied, ValidationError
 
+
+from vocab_trainer.models import StudentContextProgress
 from read_trainer.utils.quiz_generation import (
     generate_and_save_passage_with_questions,
     append_questions_to_existing_passage,
@@ -34,19 +33,15 @@ from read_trainer.utils.quiz_generation import (
     generate_eiken_passage_with_questions,
     append_questions_to_existing_eiken_passage,
 )
-
 from read_trainer.utils.quiz_scoring import process_reading_answers
-
 from read_trainer.services import softmax_permute_contexts_from_progresses
-
-from django.views.decorators.http import require_GET
-
-from django.utils import timezone
 from read_trainer.utils.quiz_selection import select_passages_for_student
-
-from django.core.exceptions import PermissionDenied
-
-from django.utils.decorators import method_decorator
+from read_trainer.access_check.student_access_check import student_access_check
+from read_trainer.access_check.passage_access_check import passage_access_check
+from read_trainer.models import ReadingPassage
+from accounts.models import BaseUser
+from read_trainer.utils.get_batch_id import get_and_validate_batch_id_from_request
+from vocab_trainer.services.student_availability import has_vocab_progress
 
 
 import logging
@@ -54,24 +49,52 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def is_admin_or_teacher(user):
-    return user.role in ['teacher', 'classroom_administrator', 'organization_administrator']
+VALID_EIKEN_LEVELS = {value for value, _ in ReadingPassage.EIKEN_LEVEL_CHOICES}
 
 
-@login_required
-@user_passes_test(is_admin_or_teacher)
+def is_valid_eiken_level(eiken_level: str | None) -> bool:
+    """英検のレベル指定が妥当かどうかのチェック
+
+    Args:
+        eiken_level (str | None): 検証対象の英検レベル
+
+    Returns:
+        bool: 妥当であるか否か
+    """
+    return eiken_level in VALID_EIKEN_LEVELS
+
+
+def is_admin_or_teacher(user: BaseUser) -> bool:
+    """管理者か講師かを判定
+
+    Args:
+        user (BaseUser): 判定
+
+    Returns:
+        bool: 管理者や講師か否か
+    """
+    return getattr(user, "role", None) in ['teacher', 'classroom_administrator', 'organization_administrator']
+
+
 def quiz_type_select_with_admin(request):
     """POST, GETの両方に対応したクイズタイプ選択画面"""
+    if not request.user.is_authenticated:
+        return redirect("accounts_auth:login")
+    if not is_admin_or_teacher(request.user):
+        ctx = {
+            "user_id": request.user.id,
+            "user_role": getattr(request.user, "role", None)
+        }
+        logger.warning(
+            "管理者・講師用クイズ選択に対して、異なるロールのユーザーからアクセスがありました。",
+            extra=ctx
+        )
+        raise PermissionDenied("この機能にアクセスできません。")
     classroom_id = request.GET.get('classroom_id') or request.POST.get('classroom_id') or ''
     target_student_id = request.GET.get('target_student_id') or request.POST.get('target_student_id')
-    student = get_object_or_404(Student, pk=target_student_id)
-    role_obj = request.user.get_role_object()
-    if hasattr(role_obj, "can_manage_student") and not role_obj.can_manage_student(student):
-        logger.warning(
-            "アクセス権のない生徒に対し、クイズ選択画面を表示しようとしています。(user: %s, student_id: %s)",
-            request.user, student.id
-            )
-        raise PermissionDenied("この生徒にはアクセスできません。")
+    student = student_access_check(request.user, target_student_id)
+    if not has_vocab_progress(student):
+        return render(request, "read_trainer/for_admin/no_vocab_available.html", {})
     progresses_of_recommended_passage, has_reading_passages = select_passages_for_student(student, "textbook")
     now = timezone.now()
     # 一時的に動的な属性を追加する
@@ -85,20 +108,26 @@ def quiz_type_select_with_admin(request):
     }
     return render(request, 'read_trainer/for_admin/quiz_type_select.html', context)
 
-@login_required
-@user_passes_test(is_admin_or_teacher)
+
 def eiken_quiz_type_select_with_admin(request):
     """POST, GETの両方に対応した英検クイズタイプ選択画面"""
+    if not request.user.is_authenticated:
+        return redirect("accounts_auth:login")
+    if not is_admin_or_teacher(request.user):
+        ctx = {
+            "user_id": request.user.id,
+            "user_role": getattr(request.user, "role", None)
+        }
+        logger.warning(
+            "管理者・講師用英検クイズ選択に対して、異なるロールのユーザーからアクセスがありました。",
+            extra=ctx
+        )
+        raise PermissionDenied("この機能にアクセスできません。")
     classroom_id = request.GET.get('classroom_id') or request.POST.get('classroom_id') or ''
     target_student_id = request.GET.get('target_student_id') or request.POST.get('target_student_id')
-    student = get_object_or_404(Student, pk=target_student_id)
-    role_obj = request.user.get_role_object()
-    if hasattr(role_obj, "can_manage_student") and not role_obj.can_manage_student(student):
-        logger.warning(
-            "アクセス権のない生徒に対し、クイズ選択画面を表示しようとしています。(user: %s, student_id: %s)",
-            request.user, student.id
-            )
-        raise PermissionDenied("この生徒にはアクセスできません。")
+    student = student_access_check(request.user, target_student_id)
+    if not has_vocab_progress(student):
+        return render(request, "read_trainer/for_admin/no_vocab_available.html", {})
     progresses_of_recommended_passage, has_reading_passages = select_passages_for_student(student, "eiken")
     now = timezone.now()
     # 一時的に動的な属性を追加する
@@ -113,9 +142,23 @@ def eiken_quiz_type_select_with_admin(request):
     return render(request, 'read_trainer/for_admin/eiken_quiz_type_select.html', context)
 
 
-@method_decorator([login_required, user_passes_test(is_admin_or_teacher)], name="dispatch")
 class AdminReadingQuizDispatcherView(View):
     """選択されたクイズに必要な処理を行い、クイズ解答画面へリダイレクト"""
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        if not is_admin_or_teacher(request.user):
+            ctx = {
+                "user_id": request.user.id,
+                "user_role": getattr(request.user, "role", None)
+            }
+            logger.warning(
+                "管理者・講師用クイズ出題処理に対して、異なるロールのユーザーからアクセスがありました。",
+                extra=ctx
+            )
+            raise PermissionDenied("この機能にアクセスできません。")
+        return super().dispatch(request, *args, **kwargs)
+
     def post(self, request):
         student_id = request.POST.get("target_student_id")
         classroom_id = request.POST.get("classroom_id")
@@ -127,18 +170,10 @@ class AdminReadingQuizDispatcherView(View):
             logger.error("クイズタイプが指定されていません。")
             return render(request, 'read_trainer/for_admin/generation_failed.html', {"error_message": "クイズタイプが指定されていません。"})
 
-        student = get_object_or_404(Student, id=student_id)
-        role_obj = request.user.get_role_object()
-        if hasattr(role_obj, "can_manage_student") and not role_obj.can_manage_student(student):
-            logger.warning(
-                "アクセス権のない生徒に対する出題リクエスト (user=%s, student_id=%s)",
-                request.user.id,
-                student.id,
-            )
-            raise PermissionDenied("この生徒にはアクセスできません。")
+        student = student_access_check(request.user, student_id)
 
         if quiz_type == "new":
-            progresses = StudentContextProgress.objects.filter(
+            progresses = StudentContextProgress.objects.with_active_student().filter(
                 student=student,
                 total_count__gt=0
             ).select_related("context")
@@ -155,8 +190,8 @@ class AdminReadingQuizDispatcherView(View):
                 })
 
         elif quiz_type == "reuse_questions":
-            passage = get_object_or_404(ReadingPassage, id=passage_id, created_by=student, source_type="textbook")
-            progresses = StudentContextProgress.objects.filter(
+            passage = passage_access_check(request.user, passage_id, source_type="textbook", expected_student_id=student.id)
+            progresses = StudentContextProgress.objects.with_active_student().filter(
                 student=student,
                 total_count__gt=0
             ).select_related("context")
@@ -174,8 +209,7 @@ class AdminReadingQuizDispatcherView(View):
                 })
 
         elif quiz_type == "reuse_all":
-            passage = get_object_or_404(ReadingPassage, id=passage_id, created_by=student, source_type="textbook")
-
+            passage = passage_access_check(request.user, passage_id, source_type="textbook", expected_student_id=student.id)
             batch_id = get_latest_batch_for_passage(passage)
             if (batch_id is None) or (not str(batch_id).isdigit()):
                 logger.error("batch_idが存在しません。(passage_id: %s, batch_id: %s)",
@@ -183,7 +217,12 @@ class AdminReadingQuizDispatcherView(View):
                 return render(request, 'read_trainer/for_admin/no_passage_available.html', {"error_message": "利用できる問題のバージョンがありません。"})
 
         elif quiz_type == "eiken_new":
-            progresses = StudentContextProgress.objects.filter(
+            if not is_valid_eiken_level(eiken_level):
+                logger.warning("英検レベルが不正です。(eiken_level=%s)", eiken_level)
+                return render(request, "read_trainer/for_admin/generation_failed.html", {
+                    "error_message": "英検レベルが不正です。"
+                })
+            progresses = StudentContextProgress.objects.with_active_student().filter(
                 student=student,
                 total_count__gt=0
             ).select_related("context")
@@ -202,9 +241,13 @@ class AdminReadingQuizDispatcherView(View):
                 })
                 
         elif quiz_type == "eiken_reuse_questions":
-            passage = get_object_or_404(ReadingPassage, id=passage_id, created_by=student, source_type="eiken")
-
-            progresses = StudentContextProgress.objects.filter(
+            if not is_valid_eiken_level(eiken_level):
+                logger.warning("英検レベルが不正です。(eiken_level=%s)", eiken_level)
+                return render(request, "read_trainer/for_admin/generation_failed.html", {
+                    "error_message": "英検レベルが不正です。"
+                })
+            passage = passage_access_check(request.user, passage_id, source_type="eiken", expected_student_id=student.id)
+            progresses = StudentContextProgress.objects.with_active_student().filter(
                 student=student,
                 total_count__gt=0
             ).select_related("context")
@@ -222,10 +265,9 @@ class AdminReadingQuizDispatcherView(View):
                 })
                 
         elif quiz_type == "eiken_reuse_all":
-            passage = get_object_or_404(ReadingPassage, id=passage_id, created_by=student, source_type="eiken")
-
+            passage = passage_access_check(request.user, passage_id, source_type="eiken", expected_student_id=student.id)
             batch_id = get_latest_batch_for_passage(passage)
-            if batch_id is None:
+            if (batch_id is None) or (not str(batch_id).isdigit()):
                 logger.error("バッチIDが存在しません。 (passage_id=%s, batch_id=%s)", passage_id, batch_id)
                 return render(request, 'read_trainer/for_admin/no_passage_available.html', {"error_message": "利用できる問題のバージョンが存在しません。"})
         else:
@@ -241,34 +283,50 @@ class AdminReadingQuizDispatcherView(View):
         )
 
 
-@method_decorator([login_required, user_passes_test(is_admin_or_teacher)], name="dispatch")
 class AdminReadingQuizSolveView(View):
     """クイズの回答画面、および結果画面の表示(管理者用)"""
     template_solve = "read_trainer/for_admin/solve.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        if not is_admin_or_teacher(request.user):
+            ctx = {
+                "user_id": request.user.id,
+                "user_role": getattr(request.user, "role", None)
+            }
+            logger.warning(
+                "管理者・講師用クイズ回答画面・解答処理に対して、異なるロールのユーザーからアクセスがありました。",
+                extra=ctx
+            )
+            raise PermissionDenied("この機能にアクセスできません。")
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
         """
         与えられた情報からクイズ画面をレンダリングする
         """
-        passage = get_object_or_404(ReadingPassage, pk=pk)
-        classroom_id = request.GET.get("classroom_id", "")
-        batch_id = request.GET.get("batch_id")
         is_eiken = request.GET.get("is_eiken") == "1"
-
-        if batch_id:
-            questions = passage.questions.filter(batch_id=batch_id)
+        if is_eiken:
+            source_type = "eiken"
         else:
-            questions = passage.questions.all()
-        
-        student = passage.created_by
-        role_obj = request.user.get_role_object()
-        if hasattr(role_obj, "can_manage_student") and not role_obj.can_manage_student(student):
-            logger.warning(
-                "アクセス権のない生徒に対する出題リクエスト (user=%s, student_id=%s)",
-                request.user.id,
-                student.id,
-            )
-            raise PermissionDenied("この生徒にはアクセスできません。")
+            source_type = "textbook"
+        passage = passage_access_check(request.user, pk, source_type=source_type)
+        classroom_id = request.GET.get("classroom_id", "")
+        student_id = passage.created_by_id
+        student = student_access_check(request.user, student_id)
+
+        try:
+            batch_id = get_and_validate_batch_id_from_request(request)
+        except ValidationError:
+            return render(request, "read_trainer/for_admin/generation_failed.html", {
+                "error_message": "バッチIDが不正です。"
+            })
+        questions = passage.questions.filter(batch_id=batch_id)
+        if not questions.exists():
+            return render(request, "read_trainer/for_admin/generation_failed.html", {
+                "error_message": "指定されたバッチIDの問題が存在しません。"
+            })
 
         context = {
             "passage": passage,
@@ -284,46 +342,28 @@ class AdminReadingQuizSolveView(View):
         """
         ユーザーの解答をPOSTとして受けとり、解答画面へ遷移
         """
-        passage = get_object_or_404(ReadingPassage, pk=pk)
-        classroom_id = request.POST.get("classroom_id", "")
-        student_id = request.POST.get("student_id")
-        student = passage.created_by
-        role_obj = request.user.get_role_object()
-        if hasattr(role_obj, "can_manage_student") and not role_obj.can_manage_student(student):
+        student_id_from_post = request.POST.get("student_id")
+        if not student_id_from_post:
             logger.warning(
-                "アクセス権のない生徒に対する採点リクエスト (user=%s, student_id=%s)",
-                request.user.id,
-                student.id,
+                "POSTにstudent_idが含まれていません。(user.id=%s, passage_id=%s)",
+                getattr(request.user, "id", None),
+                pk,
             )
-            raise PermissionDenied("この生徒にはアクセスできません。")
+            raise PermissionDenied("不正なアクセスです。")
         is_eiken = request.POST.get("is_eiken") == "1"
+        if is_eiken:
+            source_type = "eiken"
+        else:
+            source_type = "textbook"
+        passage = passage_access_check(request.user, pk, source_type=source_type, expected_student_id=student_id_from_post)
+        classroom_id = request.POST.get("classroom_id", "")
+        student_id_from_passage = passage.created_by_id
+        student = student_access_check(request.user, student_id_from_passage)
         audio_file_names = request.POST.get("audio_file_names", "")
-        logger.info(f"audio_file_names in AdminReadingQuizSolveView: {audio_file_names}")
-
-        if str(student.id) != str(student_id):
-            logger.warning(
-                "不正アクセスの可能性 (送信 student_id=%s, passage.student_id=%s)",
-                student_id,
-                student.id,
-            )
-            raise PermissionDenied("不正なアクセスです")
-
-        batch_id_raw = request.POST.get("batch_id")
-
-        if not batch_id_raw:
-            logger.error("バッチIDが送信されていません。(batch_id: %s)", batch_id_raw)
-            return render(request, "read_trainer/for_admin/scoring_failed.html", {
-                "error_message": "バッチIDが不正です。"
-            })
 
         try:
-            batch_id = int(batch_id_raw)
-        except (ValueError, TypeError):
-            logger.exception(
-                "バッチIDの値もしくは型のエラー(batch_id: %s, type(batch_id): %s)",
-                batch_id_raw,
-                type(batch_id_raw),
-            )
+            batch_id = get_and_validate_batch_id_from_request(request)
+        except ValidationError:
             return render(request, "read_trainer/for_admin/scoring_failed.html", {
                 "error_message": "バッチIDが不正です。"
             })
@@ -331,7 +371,7 @@ class AdminReadingQuizSolveView(View):
         questions = passage.questions.filter(batch_id=batch_id)
         if not questions.exists():
             logger.error("長文に紐づけられた問題が存在しません。(questions: %s, batch_id: %s, passage_id: %s)", questions, batch_id, passage.id)
-            return render(request, "read_trainer/for_admin/generation_failed.html", {
+            return render(request, "read_trainer/for_admin/scoring_failed.html", {
                 "error_message": "指定されたバッチIDの問題が存在しません。"
             })
 
@@ -369,7 +409,7 @@ class AdminReadingQuizSolveView(View):
             "student_id": str(student.id),
             "is_eiken": is_eiken,
             "audio_file_names": audio_file_names,
-            "batch_id": int(batch_id),
+            "batch_id": batch_id,
             # ここで結果全体をシリアライズしてもよいが、必要最低限を保存
             "result_data": [
                 {
@@ -381,13 +421,23 @@ class AdminReadingQuizSolveView(View):
             ],
         }
         url = reverse("read_trainer:admin_result")
-        return redirect(f"{url}?classroom_id={classroom_id}&target_student_id={student_id}&is_eiken={'1' if is_eiken else '0'}")
+        return redirect(f"{url}?classroom_id={classroom_id}&target_student_id={student.id}&is_eiken={'1' if is_eiken else '0'}")
     
 
-@login_required
-@user_passes_test(is_admin_or_teacher)
 @require_GET
 def admin_result_view(request):
+    if not request.user.is_authenticated:
+        return redirect("accounts_auth:login")
+    if not is_admin_or_teacher(request.user):
+        ctx = {
+            "user_id": request.user.id,
+            "user_role": getattr(request.user, "role", None)
+        }
+        logger.warning(
+            "管理者・講師用クイズ結果表示に対して、異なるロールのユーザーからアクセスがありました。",
+            extra=ctx
+        )
+        raise PermissionDenied("この機能にアクセスできません。")
     data = request.session.pop("read_quiz_result", None)
     if not data:
         classroom_id = request.GET.get("classroom_id")
@@ -405,18 +455,15 @@ def admin_result_view(request):
         elif role in ("classroom_administrator", "organization_administrator"):
             return redirect("organization_admin:classroom_list")
         return redirect("accounts_auth:login")
-    passage = get_object_or_404(ReadingPassage, pk=data["passage_id"])
-    student = get_object_or_404(Student, pk=data["student_id"])
-    role_obj = request.user.get_role_object()
-    if hasattr(role_obj, "can_manage_student") and not role_obj.can_manage_student(student):
-        logger.warning(
-            "アクセス権のない生徒に対する解答画面リクエスト (user=%s, student_id=%s)",
-            request.user.id,
-            student.id,
-        )
-        raise PermissionDenied("この生徒にはアクセスできません。")
+    is_eiken = data["is_eiken"]
+    if is_eiken:
+        source_type = "eiken"
+    else:
+        source_type = "textbook"
+    student = student_access_check(request.user, data["student_id"])
+    passage = passage_access_check(request.user, data["passage_id"], source_type=source_type, expected_student_id=student.id)
     # 整合性チェック
-    student_id_by_passage = passage.created_by.id
+    student_id_by_passage = passage.created_by_id
     student_id_by_data = student.id
     if str(student_id_by_passage) != str(student_id_by_data):
         logger.warning(
@@ -446,7 +493,7 @@ def admin_result_view(request):
         "student": student,
         "classroom_id": data["classroom_id"],
         "results": full_results,
-        "is_eiken": data["is_eiken"],
+        "is_eiken": is_eiken,
         "audio_file_names": data["audio_file_names"],
     }
 

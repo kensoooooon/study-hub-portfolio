@@ -31,9 +31,9 @@ urlpatterns = [
     path('line/', include('line_integration.urls')),  # LINE連携用アプリ
     path('study_reminder/', include('study_reminder.urls')),  # 学習時間リマインド用アプリ
     path('vocab_trainer/', include('vocab_trainer.urls')),  # 英単語クイズ用
-    path('chem_trainer/', include('chem_trainer.urls')),  # 化学クイズ用
+    # path('chem_trainer/', include('chem_trainer.urls')),  # 化学クイズ用
     path('read_trainer/', include('read_trainer.urls')),  # 長文問題用
-    path('kobun_trainer/', include('kobun_trainer.urls')),  # 古文単語用
+    # path('kobun_trainer/', include('kobun_trainer.urls')),  # 古文単語用
     path('audio_support/', include('audio_support.urls')),  # 音声サポート用
     path('listening_trainer/', include('listening_trainer.urls')),  # リスニング練習
     path('math_trainer/', include('math_trainer.urls')),  # 数学練習

@@ -1,5 +1,6 @@
 import openai
 from django.conf import settings
+from processors.openai_models import OpenAIModel
 from conversations.models import MessageLog
 from accounts.models import Student
 
@@ -61,12 +62,12 @@ class SummaryProcessor:
 
         try:
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=OpenAIModel.SUMMARY,
                 messages=[
                     {"role": "system", "content": "あなたは教育アシスタントです。"},
                     {"role": "user", "content": prompt}
                     ],
-                max_tokens=1000,
+                max_completion_tokens=1000,
                 temperature=0.5
             )
             summary = response.choices[0].message.content.strip()

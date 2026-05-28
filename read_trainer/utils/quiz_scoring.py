@@ -1,8 +1,13 @@
 from read_trainer.models import ReadingAnswer, StudentReadingPassageProgress
 from django.utils import timezone
 
+from django.db import transaction
 
+
+@transaction.atomic
 def process_reading_answers(student, passage, questions, post_data):
+    if passage.created_by_id != student.id:
+        raise ValueError("生徒と長文の作成者が一致しません。")
     results = []
     number_of_problems = 0
     number_of_correct = 0
@@ -38,7 +43,5 @@ def process_reading_answers(student, passage, questions, post_data):
         student=student, passage=passage
     )
     correct_rate = number_of_correct / number_of_problems if number_of_problems else 0.0
-    print(f"正解率: {correct_rate:.4f}")
     obj.update_review_priority_by_solving(correct_rate=correct_rate)
-    obj.last_reviewed_at = timezone.now()
     return results

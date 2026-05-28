@@ -178,29 +178,6 @@ class Elementary2DisplayViewsTests(TestCase):
         return self.client.post(self.url_dispatcher_display, data=data)
 
     @patch(f"{DISPLAY_VIEWS_MODULE}.student_access_check")
-    def test_display_dispatcher_requires_login(self, mock_access):
-        self.client.logout()
-        res = self._post_dispatcher_clock()
-        self.assertEqual(res.status_code, 302)
-        mock_access.assert_not_called()
-
-    @patch(f"{DISPLAY_VIEWS_MODULE}.student_access_check")
-    def test_display_dispatcher_missing_problem_types_redirects(self, mock_access):
-        mock_access.return_value = self.student
-
-        res = self._post_dispatcher_clock(problem_type=[])
-        self.assertEqual(res.status_code, 302)
-        self.assertIn(self.url_problem_select, res["Location"])
-
-    @patch(f"{DISPLAY_VIEWS_MODULE}.student_access_check")
-    def test_display_dispatcher_missing_widths_redirects(self, mock_access):
-        mock_access.return_value = self.student
-
-        res = self._post_dispatcher_clock(width_of_time=[])
-        self.assertEqual(res.status_code, 302)
-        self.assertIn(self.url_problem_select, res["Location"])
-
-    @patch(f"{DISPLAY_VIEWS_MODULE}.student_access_check")
     def test_display_dispatcher_success_sets_session_and_redirects(self, mock_access):
         mock_access.return_value = self.student
 

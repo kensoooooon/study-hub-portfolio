@@ -14,15 +14,25 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         User = get_user_model()
-        email = User.objects.normalize_email((options["email"] or "").strip()).strip()
-
-        if not email:
+        raw = (options["email"] or "").strip()
+        if not raw:
             raise CommandError("email が空です。--email を指定してください。")
 
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
+        email = raw.strip()
+
+        qs = User.objects.filter(email__iexact=email)
+
+        if not qs.exists():
             raise CommandError(f"{email} を持つユーザーは存在しません。")
+
+        if qs.count() > 1:
+            # 万一のデータ不整合（過去データ/手動投入）を明示的に止める
+            candidates = ", ".join(qs.values_list("email", flat=True))
+            raise CommandError(
+                f"{email} に一致するユーザーが複数存在します（大小無視）。DBを確認してください: {candidates}"
+            )
+
+        user = qs.get()
 
         try:
             group = Group.objects.get(name=GROUP_NAME)
@@ -31,6 +41,7 @@ class Command(BaseCommand):
 
         if not user.groups.filter(pk=group.pk).exists():
             self.stdout.write(self.style.WARNING(f"{user} は既に {GROUP_NAME} に所属していません。"))
+            return
 
         user.groups.remove(group)
         self.stdout.write(self.style.SUCCESS(f"{user} を {GROUP_NAME} グループから除外しました。"))

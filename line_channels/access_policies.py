@@ -24,22 +24,34 @@ def _raise_404(log_dict: Optional[dict] = None) -> None:
         logger.warning(msg, extra={"ctx": log_dict})
     raise Http404
 
-def _require_perms_or_404(user, perms: Iterable[str], *, log_dict: Optional[dict] = None) -> None:
+def _require_perms_or_404(user, perms: Iterable[str], *, required_group: str | None = None, log_dict: Optional[dict] = None) -> None:
     if not user.is_authenticated:
         _raise_404(log_dict)
+    
+    if required_group:  # グループ所属を必須とする場合は
+        if not user.groups.filter(name=required_group).exists():  # selectors.pyとあわせるために、グループへの所属も確認
+            ctx = dict(log_dict or {})
+            ctx.update({"missing_group": required_group})
+            _raise_404(ctx)
 
     for p in perms:
         if not user.has_perm(p):
             ctx = dict(log_dict or {})
             ctx.update({"missing_perm": p})
             _raise_404(ctx)
+
 # ---------------------------
 # LINE Channels（Ops: 全組織OK）
 # ---------------------------
+OPS_GROUP = "ops_line_channels"
 
 def require_can_manage_line_channels_or_404(user, *, log_dict: Optional[dict] = None) -> None:
-    _require_perms_or_404(user, ["line_channels.manage_line_channels"], log_dict=log_dict)
+    _require_perms_or_404(user, ["line_channels.manage_line_channels"], required_group=OPS_GROUP, log_dict=log_dict)
 
 
 def require_can_view_line_channel_secret_metadata_or_404(user, *, log_dict: Optional[dict] = None) -> None:
-    _require_perms_or_404(user, ["line_channels.view_line_channel_secret_metadata"], log_dict=log_dict)
+    _require_perms_or_404(user, ["line_channels.view_line_channel_secret_metadata"], required_group=OPS_GROUP, log_dict=log_dict)
+
+
+def require_can_add_line_channels_or_404(user, *, log_dict: Optional[dict] = None) -> None:
+    _require_perms_or_404(user, ["line_channels.add_linechannel"], required_group=OPS_GROUP, log_dict=log_dict)

@@ -19,7 +19,6 @@
 <div class="container mt-4">
 <h2>{{ student.username }} さんの英検読解クイズ出題</h2>
 
-<!-- ✅ 新規出題は常に可能 -->
 <form method="post" action="{% url 'read_trainer:quiz_student_dispatch' %}" class="mb-4" data-disable-on-submit="true">
     {% csrf_token %}
     <input type="hidden" name="quiz_type" value="eiken_new">

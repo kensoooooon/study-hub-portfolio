@@ -312,7 +312,7 @@ def delete_temp_audio_post_batch(request):
 
 
 @csrf_exempt
-@require_oidc_token(audience=settings.OIDC_AUDIENCE)
+@require_oidc_token(audience="https://django-study-hub.an.r.appspot.com")
 def clean_old_temp_audio(request):
     """
     Google Cloud Schedulerを用いて、定期的に一時音声ファイルを削除

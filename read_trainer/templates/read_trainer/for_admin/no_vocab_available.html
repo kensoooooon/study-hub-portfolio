@@ -1,5 +1,14 @@
-<h2>使用可能な語彙が見つかりませんでした。</h2>
-<p>設定を見直してください。</p>
-{% if error_message %}
-    <h2>{{ error_message}}</h2>
-{% endif %}
+{% extends 'base.html' %}
+
+{% block title %}長文学習を利用できません{% endblock %}
+
+
+{% block content %}
+<h2>長文学習を利用できません</h2>
+<p>長文学習を開始するには、まず英単語学習を進めてください。</p>
+<p>
+    前の画面に戻る場合は、ブラウザの戻るボタンを使ってください。
+    戻れない場合は、ホームへ戻ってください。
+</p>
+<a href="{{ homepage_url }}" class="btn btn-primary mt-3">ホームへ戻る</a>
+{% endblock %}

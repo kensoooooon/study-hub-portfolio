@@ -9,23 +9,29 @@ def get_pruned_progresses(student, source_type, max_count=100):
     指定生徒・教材種別の進捗オブジェクトを取得し、
     max_count を超えていたら古い順に削除してから返却する。
     """
-    progresses = StudentReadingPassageProgress.objects.filter(
+    progresses = StudentReadingPassageProgress.objects.with_active_and_valid_student().filter(
         student=student,
-        passage__source_type=source_type
+        passage__source_type=source_type,
     ).select_related("passage")
 
     excess = progresses.count() - max_count
     if excess > 0:
-        progresses.order_by("last_reviewed_at")[:excess].delete()
+        ids_to_delete = list(
+            progresses
+            .order_by("last_reviewed_at",  "id")
+            .values_list("id", flat=True)[:excess]
+        )
 
-        # 再取得して、削除されたオブジェクトを除外
-        progresses = StudentReadingPassageProgress.objects.filter(
+        StudentReadingPassageProgress.objects.filter(
+            id__in=ids_to_delete  # クエリセットをスライスで一部取得したままでは削除不可なので、取得し直して削除
+        ).delete()
+
+        progresses = StudentReadingPassageProgress.objects.with_active_and_valid_student().filter(
             student=student,
-            passage__source_type=source_type
+            passage__source_type=source_type,
         ).select_related("passage")
 
     return progresses
-
 
 
 def select_passages_for_student(student, source_type="textbook", top_k=10, temperature=1.0, max_progresses=100):

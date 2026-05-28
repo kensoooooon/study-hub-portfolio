@@ -1,6 +1,5 @@
 from typing import Optional
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
 from django.shortcuts import get_object_or_404
 import logging
 
@@ -24,7 +23,7 @@ def student_access_check(user: BaseUser, raw_student_id: Optional[str]) -> Stude
         raise PermissionDenied("不正なアクセスです。")
 
     if is_admin_or_teacher(user):
-        student = get_object_or_404(Student, pk=raw_student_id)
+        student = get_object_or_404(Student.objects.active(), pk=raw_student_id)
         if hasattr(role_obj, "can_manage_student") and not role_obj.can_manage_student(student):
             logger.warning("権限外の生徒アクセス (user.id=%s, student_id=%s)", getattr(user, "id", None), raw_student_id)
             raise PermissionDenied("この生徒にはアクセスできません。")

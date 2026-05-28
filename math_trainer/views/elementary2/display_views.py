@@ -1,26 +1,25 @@
 from django.views.generic import TemplateView
 
 from django.views import View
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_GET
 
 from math_trainer.utils import problem_generator, shape_two_columns
 
-from math_trainer.models import GradeChoices, ProblemSession, ProblemInstance
+from math_trainer.models import GradeChoices, ProblemInstance
 
 from math_trainer.math_process import elementary2
 
 from django.contrib import messages
 
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
 
 from math_trainer.utils.student_access_check import student_access_check
 from math_trainer.utils.build_url import build_url
 from math_trainer.utils.session_access_check import session_access_check
 
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +41,15 @@ def redirect_to_elementary2_problem_select(request, *, student_id: str, classroo
     return redirect(build_url(base_url, student_id, classroom_id))
 
 
-class Grade2DisplayDispatcherView(LoginRequiredMixin, View):
+class Grade2DisplayDispatcherView(View):
     """
     小学2年生用のブラウザ表示問題の割当を担当
     """
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
+
     def post(self, request):
         raw_student_id = request.POST.get("student_id")
         user = request.user
@@ -53,7 +57,12 @@ class Grade2DisplayDispatcherView(LoginRequiredMixin, View):
         student_id = student.id
         classroom_id = request.POST.get("classroom_id")
         category = request.POST.get("problem_category")
-        
+        if not category:
+            error_message = "最低1つの問題カテゴリを選択して下さい。"
+            return redirect_to_elementary2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
+        if category not in ["clock"]:
+            error_message = "想定されていないカテゴリが選択されました。"
+            return redirect_to_elementary2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
         if category == "clock":
             problem_types = request.POST.getlist("problem_type")
             if not problem_types:
@@ -70,14 +79,20 @@ class Grade2DisplayDispatcherView(LoginRequiredMixin, View):
             base_url = reverse('math_trainer:elementary2:clock_display')
             url = build_url(base_url, student_id, classroom_id)
             return redirect(url)
-        else:
-            return render(request, "math_trainer/common/no_category.html")
+        
+        error_message = "想定していない動作です。管理者にお知らせ下さい。"
+        return redirect_to_elementary2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
 
-class ClockDisplayView(LoginRequiredMixin, TemplateView):
+class ClockDisplayView(TemplateView):
     """時計や時間経過などを尋ねる問題の作成、および採点
     """
     template_name = "math_trainer/elementary2/clock/for_display.html"
     
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request):
         """クイズ画面の表示"""
         classroom_id = request.GET.get("classroom_id")
@@ -182,9 +197,10 @@ class ClockDisplayView(LoginRequiredMixin, TemplateView):
         return redirect(url)
 
 
-@login_required
 @require_GET
 def clock_result_view(request):
+    if not request.user.is_authenticated:
+        return redirect("accounts_auth:login")
     data = request.session.pop("math_quiz_result", None)
     if not data:
         classroom_id = request.GET.get("classroom_id")

@@ -84,22 +84,50 @@ class WordMeaningRelationDifficulty(models.Model):
         return f"{self.relation} - 難易度: {self.difficulty:.2f}"
 
 
+class TextbookQuerySet(models.QuerySet):
+    """
+    アクティブ,非アクティブをまとめて扱うためのマネジャー
+    """
+    def active(self):
+        return self.filter(is_active=True)
+
+    def inactive(self):
+        return self.filter(is_active=False)
+
+
 class Textbook(models.Model):
     name = models.CharField(max_length=100)
     publisher = models.CharField(max_length=100)
     grade = models.PositiveSmallIntegerField()
     publication_year = models.PositiveIntegerField(null=True, blank=True)  # ← 最初はオプションとして追加
+    is_active = models.BooleanField(default=True)
+
+    objects = TextbookQuerySet.as_manager()
 
     class Meta:
         unique_together = ('name', 'grade', 'publication_year')
 
     def __str__(self):
         year_display = f"（{self.publication_year}年度）" if self.publication_year else ""
-        return f"{self.name} (中{self.grade}年){year_display}"
+        inactive_display = "" if self.is_active else "【無効】"
+        return f"{inactive_display}{self.name} (中{self.grade}年){year_display}"
+
+    def deactivate(self, using=None):
+        """
+        DBを指定しつつ無効化
+        """
+        self.is_active = False
+        self.save(using=using, update_fields=["is_active"])
+
+    def delete(self, using=None, keep_parents=False):
+        """
+        shellなどによる例外的な誤操作の防止
+        """
+        self.deactivate(using=using)
 
 
 class Chapter(models.Model):
-    textbook = models.ForeignKey(Textbook, on_delete=models.CASCADE, related_name="chapters")
+    textbook = models.ForeignKey(Textbook, on_delete=models.PROTECT, related_name="chapters")
     title = models.CharField(max_length=100)
     order = models.PositiveSmallIntegerField()
 
@@ -163,6 +191,11 @@ class ContextPartOfSpeech(models.Model):
         return f"{self.context} ({self.part_of_speech.display_name})"
 
 
+class StudentContextProgressQuerySet(models.QuerySet):
+    def with_active_student(self):
+        return self.filter(student__is_active=True)
+
+
 class StudentContextProgress(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="context_progress")
     context = models.ForeignKey(WordMeaningContext, on_delete=models.CASCADE, related_name="student_progress")
@@ -178,6 +211,7 @@ class StudentContextProgress(models.Model):
     next_due_at = models.DateTimeField(null=True, blank=True)
     repetition_count = models.IntegerField(default=0)
     last_is_correct = models.BooleanField(null=True, blank=True)
+    objects = StudentContextProgressQuerySet.as_manager()
 
     def update_progress(self, is_correct):
         self.total_count += 1

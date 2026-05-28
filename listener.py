@@ -4,7 +4,9 @@ import sys
 import django
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Djangoの設定モジュールを指定
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_study_hub.settings")
+# Djangoを初期化
 django.setup()
 
 from google.cloud import pubsub_v1
@@ -15,10 +17,11 @@ import requests
 from django.conf import settings
 from requests.exceptions import RequestException
 from time import sleep
+import signal
+# ログ取得
 import logging
 
 logger = logging.getLogger(__name__)
-
 
 def send_line_notification(user_id, message, max_retries=5):
     """
@@ -34,33 +37,26 @@ def send_line_notification(user_id, message, max_retries=5):
     for attempt in range(1, max_retries + 1):
         try:
             response = requests.post(
-                "https://api.line.me/v2/bot/message/push",
-                headers=headers,
-                json=payload,
+                "https://api.line.me/v2/bot/message/push", headers=headers, json=payload
             )
             if response.status_code == 200:
                 logger.info(f"LINE通知が送信されました: {response.status_code}")
                 return response.json()
             elif response.status_code == 429:
                 retry_after = int(response.headers.get("Retry-After", 60))
-                logger.warning(
-                    f"Rate limit exceeded. Retrying after {retry_after} seconds..."
-                )
+                logger.warning(f"Rate limit exceeded. Retrying after {retry_after} seconds...")
                 sleep(retry_after)
             else:
                 logger.error(f"Unexpected error: {response.status_code}, {response.text}")
                 response.raise_for_status()
         except RequestException as e:
-            logger.error(
-                f"Error during notification send attempt {attempt}/{max_retries}: {e}"
-            )
+            logger.error(f"Error during notification send attempt {attempt}/{max_retries}: {e}")
             if attempt < max_retries:
                 logger.warning(f"Retrying ({attempt}/{max_retries}) after failure: {e}")
                 sleep(2 ** attempt)
             else:
                 logger.error(f"Failed after {max_retries} attempts: {e}")
                 raise
-
 
 def callback(message):
     """
@@ -90,28 +86,17 @@ def listen_to_messages():
     """
     Pub/Subサブスクリプションを監視し、メッセージを処理します。
     """
-    subscription_name = os.getenv(
-        "PUBSUB_SUBSCRIPTION",
-        getattr(settings, "PUBSUB_SUBSCRIPTION", "your-subscription-name"),
-    )
-
-    project_id = (
-        os.getenv("GCP_PROJECT")
-        or os.getenv("GOOGLE_CLOUD_PROJECT")
-        or getattr(settings, "GCP_PROJECT_ID_FALLBACK", "your-gcp-project-id")
-    )
-
-    logger.info(
-        f"Retrieved project_id: {project_id}, subscription_name: {subscription_name}"
-    )
-
+    # subscription_name = os.getenv("PUBSUB_SUBSCRIPTION")
+    subscription_name = "reminder-subscription"
+    # project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+    project_id = "django-study-hub"
+    logger.info(f"Retrieved project_id: {project_id}, subscription_name: {subscription_name}")
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(project_id, subscription_name)
     logger.info(f"Generated subscription_path: {subscription_path}")
-
+    
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
     logger.info(f"Listening for messages on {subscription_path}...")
-
     try:
         streaming_pull_future.result()
     except Exception as e:
@@ -120,12 +105,13 @@ def listen_to_messages():
 
 
 if __name__ == "__main__":
+    # logging.basicConfig(level=logging.INFO)  # ログの基本設定（必要であれば）
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
+        format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[
             logging.StreamHandler(sys.stdout)
-        ],
+        ]
     )
     logger.info("Starting listener service...")
     listen_to_messages()

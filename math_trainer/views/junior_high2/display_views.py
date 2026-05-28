@@ -1,27 +1,18 @@
 from django.views.generic import TemplateView
-
 from django.views import View
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_GET
-
-from math_trainer.utils import problem_generator, shape_two_columns
-
-from math_trainer.models import GradeChoices, ProblemSession, ProblemInstance
-
-from math_trainer.math_process import junior_high2
-
 from django.contrib import messages
 
-
+from math_trainer.utils import problem_generator, shape_two_columns
+from math_trainer.models import GradeChoices, ProblemInstance
+from math_trainer.math_process import junior_high2
 from math_trainer.math_process.junior_high2.simultaneous_equations_generator import InvalidSettingsError
-
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
-
 from math_trainer.utils.student_access_check import student_access_check
-from math_trainer.utils.build_url import build_url
 from math_trainer.utils.session_access_check import session_access_check
+from math_trainer.utils.build_url import build_url
+
 
 def redirect_to_junior_high2_problem_select(request, *, student_id: str, classroom_id: str, msg: str):
     """何かしらの不備があった場合に、問題選択に飛ばす関数
@@ -40,7 +31,12 @@ def redirect_to_junior_high2_problem_select(request, *, student_id: str, classro
     return redirect(build_url(base_url, student_id, classroom_id))
 
 
-class JuniorHigh2DisplayDispatcherView(LoginRequiredMixin, View):
+class JuniorHigh2DisplayDispatcherView(View):
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
+
     def post(self, request):
         user = request.user
         raw_student_id = request.POST.get("student_id", "")
@@ -49,6 +45,12 @@ class JuniorHigh2DisplayDispatcherView(LoginRequiredMixin, View):
         classroom_id = request.POST.get("classroom_id", "")
 
         category = request.POST.get("problem_category")
+        if not category:
+            error_message = "最低1つの問題カテゴリを選択して下さい。"
+            return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
+        if category not in ["simultaneous_equations"]:
+            error_message = "想定されていないカテゴリが選択されました。"
+            return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
         # 適宜問題タイプを追加する
         if category == "simultaneous_equations":
             used_coefficients = request.POST.getlist("used_coefficient")
@@ -69,16 +71,21 @@ class JuniorHigh2DisplayDispatcherView(LoginRequiredMixin, View):
             base_url = reverse('math_trainer:junior_high2:simultaneous_equations_display')
             url = build_url(base_url, student_id, classroom_id)
             return redirect(url)
-        else:
-            return render(request, "math_trainer/common/no_category.html")
+        error_message = "想定していない動作です。管理者にお知らせ下さい。"
+        return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
 
 
-class SimultaneousEquationsDisplayView(LoginRequiredMixin, TemplateView):
+class SimultaneousEquationsDisplayView(TemplateView):
     """
     連立方程式を解く問題の作成と採点
     """
     template_name = "math_trainer/junior_high2/simultaneous_equations/for_display.html"
-    
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request):
         """
         クイズ画面の表示
@@ -99,7 +106,7 @@ class SimultaneousEquationsDisplayView(LoginRequiredMixin, TemplateView):
             error_message = "最低1つの使用する係数を選択してください。"
             return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
         answer_types = request.session.get("answer_types", None)
-        if not answer_types:
+        if answer_types is None:
             error_message = "最低1つの問題タイプを選択してください。"
             return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
         try:
@@ -195,9 +202,10 @@ class SimultaneousEquationsDisplayView(LoginRequiredMixin, TemplateView):
         return redirect(url)
     
 
-@login_required
 @require_GET
 def simultaneous_equations_result_view(request):
+    if not request.user.is_authenticated:
+        return redirect("accounts_auth:login")
     data = request.session.pop("math_quiz_result", None)
     if not data:
         classroom_id = request.GET.get("classroom_id")

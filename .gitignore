@@ -1,57 +1,31 @@
-# ----------------------------
-# Python
-# ----------------------------
+# Pythonキャッシュ
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
-.pytest_cache/
-.mypy_cache/
+.pytest_cache
 
-# ----------------------------
 # 仮想環境
-# ----------------------------
 venv/
 env/
 .venv*/
-.venv/
 
-# ----------------------------
-# Django
-# ----------------------------
+
+# Django関連
 db.sqlite3
 *.log
 staticfiles/
-media/
 
-# ----------------------------
-# Secrets / 機密情報
-# ----------------------------
+# 機密情報
 .env
-.env.*
-!.env.example
-
 .env.yaml
 app.yaml
 service-account-key.json
-*.pem
-*.key
-
 django_study_hub/.env
 
-# ----------------------------
-# Claude
-# ----------------------------
-.claude/
-
-# ----------------------------
-# SQL proxy
-# ----------------------------
+# sql-proxy
 /sql_proxy_tools/
 
-# ----------------------------
-# 内部運用スクリプト
-# ----------------------------
+# 内部処理用
 make_reminders.py
 import_excel.py
 input_excel/
@@ -59,8 +33,7 @@ input_pdf/
 read_pdf_sample.py
 extract_pdf.py
 
-# ----------------------------
-# OS
-# ----------------------------
-.DS_Store
-Thumbs.db
+# claudeのやつ
+.claude/
+claude/
+CLAUDE.md

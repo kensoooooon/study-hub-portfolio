@@ -10,4 +10,5 @@ urlpatterns = [
     path('user_register/', include('accounts.urls.user_register_urls')),           # URL: /accounts/user_register/register_name/
     path('organization_admin/', include('accounts.urls.organization_admin_urls')),
     path('student/', include('accounts.urls.student_urls')),
+    path('ops_organization/', include('accounts.urls.ops_organization_urls')),
 ]

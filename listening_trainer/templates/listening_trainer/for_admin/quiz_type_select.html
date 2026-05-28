@@ -74,8 +74,12 @@
             </div>
         </div>
     {% endfor %}
+    <button type="submit" class="btn btn-primary mt-3" data-loading-text="生成中...">この設定で出題</button>
+    </form>
+{% else %}
+    <div class="alert alert-warning mt-4">
+        現在、復習に適した長文は登録されていません。
+    </div>
 {% endif %}
 
-<button type="submit" class="btn btn-primary mt-3" data-loading-text="生成中...">この設定で出題</button>
-</form>
 {% endblock %}

@@ -1,5 +1,18 @@
-<h2>使用可能な語彙が見つかりませんでした。</h2>
-<p>設定を見直してください。</p>
-{% if error_message %}
-    <h2>{{ error_message}}</h2>
-{% endif %}
+{% extends 'base.html' %}
+
+{% block title %}長文学習を利用できません{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student:home' %}">ホーム</a></li>
+        <li class="breadcrumb-item active" aria-current="page">長文学習</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h2>長文学習を利用できません</h2>
+<p>長文学習を開始するには、まず英単語学習を進めてください。</p>
+<a href="{% url 'student:home' %}" class="btn btn-primary mt-3">ホームへ戻る</a>
+{% endblock %}

@@ -1,17 +1,13 @@
 from django import forms
-from accounts.models import BaseUser,Student, Teacher, OrganizationAdministrator, ClassroomAdministrator
-from accounts.models import Classroom
-
+from django.conf import settings
+from django.db.models import Q
+from django.forms import CheckboxSelectMultiple
 from django.core.exceptions import ValidationError
 
-from django import forms
-from .models import Classroom
-
+from accounts.models import BaseUser,Student, Teacher, OrganizationAdministrator, ClassroomAdministrator
+from accounts.models import Classroom, Organization
 from vocab_trainer.models import Textbook
-
-from django.conf import settings
-
-from django.contrib.auth.hashers import check_password
+from accounts.selectors import visible_students_qs
 
 
 class ClassroomCreateForm(forms.ModelForm):
@@ -66,9 +62,6 @@ class ClassroomEditForm(forms.ModelForm):
 
 
 class AssignClassroomForm(forms.Form):
-    """
-    生徒割り当て用フォーム
-    """
     student = forms.ModelChoiceField(queryset=Student.objects.none())
     classroom = forms.ModelChoiceField(queryset=Classroom.objects.none())
 
@@ -76,42 +69,53 @@ class AssignClassroomForm(forms.Form):
         self.current_user = kwargs.pop("current_user", None)
         super().__init__(*args, **kwargs)
 
-        # 組織管理者以外から呼ばれるケースは想定しないが、一応ガード
         if not self.current_user or self.current_user.role != "organization_administrator":
             return
 
-        org_admin: OrganizationAdministrator = self.current_user.get_role_object()
+        org_admin = self.current_user.get_role_object()
         if not org_admin:
             return
 
-        managed_orgs = org_admin.organizations.all()
-
-        # 🔐 管理している組織に属する生徒のみ
-        self.fields["student"].queryset = Student.objects.filter(
-            organization__in=managed_orgs,
+        self.fields["student"].queryset = visible_students_qs(self.current_user).filter(
             classrooms__isnull=True,
             line_user_id__isnull=False,
         )
 
-        # 🔐 管理している組織に属する教室のみ
-        self.fields["classroom"].queryset = Classroom.objects.filter(
-            organization__in=managed_orgs
-        )
+        self.fields["classroom"].queryset = org_admin.get_accessible_classrooms()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        student = cleaned_data.get("student")
+        classroom = cleaned_data.get("classroom")
+
+        if not student or not classroom or not self.current_user:
+            return cleaned_data
+
+        if not visible_students_qs(self.current_user).filter(pk=student.pk).exists():
+            raise forms.ValidationError("操作できない生徒が選択されています。")
+
+        org_admin = self.current_user.get_role_object()
+        if not org_admin or not org_admin.get_accessible_classrooms().filter(pk=classroom.pk).exists():
+            raise forms.ValidationError("管理下にない教室が選択されています。")
+
+        # if student.organization is None:
+        #     # 旧データ移行中だけ許容するならここでは弾かず、saveで補完
+        #     return cleaned_data
+
+        if student.organization_id != classroom.organization_id:
+            raise forms.ValidationError(
+                "生徒の所属組織と教室の所属組織が一致していません。"
+            )
+
+        return cleaned_data
 
     def save(self):
         student: Student = self.cleaned_data["student"]
         classroom: Classroom = self.cleaned_data["classroom"]
 
-        # 🛡 最終防衛：所属組織の整合性チェック
         if student.organization is None:
-            # 旧データなどで organization 未設定の場合は、ここで教室に合わせて設定する方針
             student.organization = classroom.organization
             student.save(update_fields=["organization"])
-        elif student.organization_id != classroom.organization_id:
-            # 「生徒の所属組織が正」なので、矛盾があれば教室側の設定ミスとして弾く
-            raise ValidationError(
-                "生徒の所属組織と教室の所属組織が一致していません。"
-            )
 
         student.classrooms.add(classroom)
         return student
@@ -119,7 +123,7 @@ class AssignClassroomForm(forms.Form):
 
 class StudentEditForm(forms.ModelForm):
     textbook = forms.ModelChoiceField(
-        queryset=Textbook.objects.all(),
+        queryset=Textbook.objects.active(),
         required=False,
         label="使用教科書"
     )
@@ -169,6 +173,18 @@ class StudentEditForm(forms.ModelForm):
             qs = qs.filter(organization=self.student.organization)
 
         self.fields["teachers"].queryset = qs.distinct()
+
+        # 基本はアクティブなもののみだが、既に選択しているテキストが存在する場合は、それも引き続き選択できるように
+        textbook_qs = Textbook.objects.active()
+        current_textbook_id = (
+            (self.instance.textbook_id if self.instance else None)
+            or (self.student.textbook_id if self.student else None)
+        )
+        if current_textbook_id:
+            textbook_qs = Textbook.objects.filter(
+                Q(is_active=True) | Q(pk=current_textbook_id)
+            )
+        self.fields["textbook"].queryset = textbook_qs
 
 
 class TeacherEditForm(forms.ModelForm):
@@ -343,3 +359,127 @@ class StudentEditForTeachersForm(forms.ModelForm):
             'textbook': '使用教科書',
             'email': 'メールアドレス',
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        textbook_qs = Textbook.objects.active()
+        if self.instance and self.instance.textbook_id:
+            textbook_qs = Textbook.objects.filter(
+                Q(is_active=True) | Q(pk=self.instance.textbook_id)
+            )
+        self.fields["textbook"].queryset = textbook_qs
+
+
+class OrganizationCreateForm(forms.ModelForm):
+    class Meta:
+        model = Organization
+        fields = ['name']
+        labels = {
+            'name': '組織名',
+        }
+
+    def clean_name(self):
+        """
+        組織名が既に登録されていないかチェックする
+        """
+        name = self.cleaned_data.get('name')
+        if Organization.objects.filter(name=name).exists():
+            raise forms.ValidationError("この組織名は既に登録されています")
+        return name
+
+
+class OrganizationAdminSelectForm(forms.Form):
+    """
+    組織に割り当てる OrganizationAdministrator を複数選択するフォーム。
+    queryset は View 側から注入する（改ざん耐性のため）。
+
+    form.is_valid()
+    ↓
+    form.full_clean()
+    ↓
+    1) 各フィールドのバリデーション
+    2) clean_<fieldname>()
+    3) form.clean()
+
+    """
+    admins = forms.ModelMultipleChoiceField(
+        queryset=OrganizationAdministrator.objects.none(),
+        required=True,
+        widget=CheckboxSelectMultiple,
+        label="割り当てる組織管理者",
+    )
+
+    def __init__(self, *args, candidate_qs=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if candidate_qs is None:
+            candidate_qs = OrganizationAdministrator.objects.none()
+        self.fields["admins"].queryset = candidate_qs
+
+    def clean_admins(self):
+        admins = self.cleaned_data["admins"]
+        # 任意: 件数上限（事故防止・UI崩壊防止）
+        MAX_ASSIGN = 20
+        if admins.count() > MAX_ASSIGN:
+            raise forms.ValidationError(f"一度に割り当てられる人数は最大 {MAX_ASSIGN} 人です。")
+        return admins
+
+
+class OrganizationAdminInvitationCreateForm(forms.Form):
+    email = forms.EmailField(label="招待メールアドレス", max_length=254)
+    
+
+class OrganizationAdminInvitationAcceptForm(forms.Form):
+    username = forms.CharField(
+        label="ユーザー名",
+        max_length=50,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+
+    password = forms.CharField(
+        label="パスワード",
+        widget=forms.PasswordInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "8文字以上のパスワードを入力",
+            }
+        ),
+    )
+
+    password_confirm = forms.CharField(
+        label="確認用パスワード",
+        widget=forms.PasswordInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "確認用パスワードを入力",
+            }
+        ),
+    )
+
+    def _reject_whitespace(self, s: str, label: str) -> str:
+        if any(ch in s for ch in ["\n", "\r", "\t", " "]):
+            raise forms.ValidationError(f"{label}に空白や改行を含めないでください。")
+        return s
+    
+    def clean_username(self):
+        username = self.cleaned_data.get("username") or ""
+        username = self._reject_whitespace(username, "ユーザー名")
+        return username
+
+    def clean_password(self):
+        password = self.cleaned_data.get("password") or ""
+        password = self._reject_whitespace(password, "パスワード")
+
+        if len(password) < 8:  # 後々Django標準のパスワード認証と入れ替える機能
+            raise forms.ValidationError("短すぎます。8文字以上入力してください。")
+        
+        return password
+    
+    def clean(self):
+        cleaned = super().clean()
+        
+        password1 = cleaned.get("password")
+        password2 = cleaned.get("password_confirm")
+        if password1 and password2 and (password1 != password2):
+            self.add_error("password_confirm", "確認用パスワードの値が一致しません。")
+
+        return cleaned

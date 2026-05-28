@@ -9,7 +9,6 @@ from line_channels.views import (
 )
 
 
-app_name = "line_channels"
 urlpatterns = [
     path('list/', LineChannelListView.as_view(), name="list"),
     path('detail/<int:pk>/', LineChannelDetailView.as_view(), name="detail"),

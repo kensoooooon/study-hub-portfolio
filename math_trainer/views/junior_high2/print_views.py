@@ -12,7 +12,6 @@ from django.contrib import messages
 
 from math_trainer.math_process.junior_high2.simultaneous_equations_generator import InvalidSettingsError
 
-from django.contrib.auth.mixins import LoginRequiredMixin
 
 from math_trainer.utils.student_access_check import student_access_check
 from math_trainer.utils.build_url import build_url
@@ -37,7 +36,12 @@ def redirect_to_junior_high2_problem_select(request, *, student_id: str, classro
     return redirect(build_url(base_url, student_id, classroom_id))
 
 
-class JuniorHigh2PrintDispatcherView(LoginRequiredMixin, View):
+class JuniorHigh2PrintDispatcherView(View):
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
+
     def post(self, request):
         user = request.user
         raw_student_id = request.POST.get("student_id", "")
@@ -52,6 +56,12 @@ class JuniorHigh2PrintDispatcherView(LoginRequiredMixin, View):
         request.session["paper_number"] = paper_number
 
         category = request.POST.get("problem_category")
+        if not category:
+            error_message = "最低1つの問題カテゴリを選択して下さい。"
+            return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
+        if category not in ["simultaneous_equations"]:
+            error_message = "想定されていないカテゴリが選択されました。"
+            return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
         # 適宜問題タイプを追加する
         if category == "simultaneous_equations":
             used_coefficients = request.POST.getlist("used_coefficient")
@@ -59,28 +69,33 @@ class JuniorHigh2PrintDispatcherView(LoginRequiredMixin, View):
                 error_message = "最低1つの使用する係数を選択してください。"
                 return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
             request.session["used_coefficients"] = used_coefficients
-            
+
             equation_types = request.POST.getlist("equation_type")
             if not equation_types:
                 error_message = "最低1つの問題タイプを選択してください。"
                 return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
             request.session["equation_types"] = equation_types
-            
+
             answer_types = request.POST.getlist("answer_type")
             if not answer_types:
                 error_message = "最低1つの解のタイプを選択してください。"
                 return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
             request.session["answer_types"] = answer_types
-            
+
             base_url = reverse('math_trainer:junior_high2:simultaneous_equations_print')
             url = build_url(base_url, student_id, classroom_id)
             return redirect(url)
-        else:
-            return render(request, "math_trainer/common/no_category.html", {})
+        error_message = "想定していない動作です。管理者にお知らせ下さい。"
+        return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
 
 
-class SimultaneousEquationsPrintView(LoginRequiredMixin, View):
+class SimultaneousEquationsPrintView(View):
     template_name = "math_trainer/junior_high2/simultaneous_equations/for_print.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request):
         """クイズ画面の表示"""
@@ -96,28 +111,33 @@ class SimultaneousEquationsPrintView(LoginRequiredMixin, View):
         if equation_types is None:
             error_message = "最低1つの問題タイプを選択してください。"
             return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
-        
+
         used_coefficients = request.session.get("used_coefficients", None)
         if used_coefficients is None:
             error_message = "最低1つの使用する係数を選択してください。"
             return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
-        
+
         answer_types = request.session.get("answer_types", None)
         if answer_types is None:
             error_message = "最低1つの解のタイプを選択してください。"
             return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
-        
-        generator_instance = junior_high2.simultaneous_equations_generator.SimultaneousEquationsGenerator(
-            equation_types=equation_types, used_coefficients=used_coefficients,
-            answer_types=answer_types
-        )
-        
+
         paper_number = get_allowed_int_from_session(request, "paper_number", allowed=ALLOWED_PAPER_NUMBERS)
         if paper_number is None:
             error_message = "プリントの枚数を選択してください。"
             return redirect_to_junior_high2_problem_select(request, student_id=student_id, classroom_id=classroom_id, msg=error_message)
 
-        
+        try:
+            generator_instance = junior_high2.simultaneous_equations_generator.SimultaneousEquationsGenerator(
+                equation_types=equation_types, used_coefficients=used_coefficients,
+                answer_types=answer_types
+            )
+        except InvalidSettingsError as e:
+            messages.error(request, "問題の条件に不正な値が含まれています。選択肢を見直してください。")
+            base_url = reverse('math_trainer:junior_high2:problem_select')
+            url = build_url(base_url, student_id, classroom_id)
+            return redirect(url)
+
         PROBLEM_NUMBER = 10
         # [紙][(左,右), (左,右), ...] を作る
         pages = []

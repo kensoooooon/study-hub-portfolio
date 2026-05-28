@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}新規組織管理者招待{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'ops_organization:list' %}">管理組織一覧</a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{% url 'ops_organization:detail' organization.id %}">組織詳細</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">新規組織管理者招待</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h2>新規組織管理者招待</h2>
+<h3>組織名: {{ organization.name }}</h3>
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div>
+        {{ form.email.label_tag }}
+        {{ form.email }}
+        {{ form.email.errors }}
+    </div>
+
+    <button type="submit">招待を送信</button>
+</form>
+{% endblock %}

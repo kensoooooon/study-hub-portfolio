@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block title %}管理組織詳細{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'ops_organization:list' %}">管理組織一覧</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">管理組織詳細</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<h2>組織詳細</h2>
+
+<h1>組織名: {{ organization.name }}</h1>
+<h3>現在の管理者</h3>
+<ul>
+{% for admin in organization.administrators.all %}
+    <li>{{ admin.username }} ({{ admin.email }})</li>
+{% empty %}
+    <li>管理者未設定</li>
+{% endfor %}
+</ul>
+{% if perms.accounts.assign_organization_administrator %}
+    <a href="{% url 'ops_organization:assign_admin' organization.id %}" class="btn btn-secondary mt-2">既存ユーザーを組織管理者割当</a>
+{% endif %}
+{% if perms.accounts.invite_organization_administrator %}
+    <a href="{% url 'ops_organization:create_admin_invitation' organization.id %}" class="btn btn-secondary mt-2">新規ユーザーを組織管理者として招待</a>
+{% endif %}
+{% if not has_line_channel %}
+    {% if perms.line_channels.add_linechannel %}
+        <a href="{% url 'ops_organization:org_line_channels:org_new' organization.id %}" class="btn btn-secondary mt-2">ラインチャンネル新規作成へ</a>
+    {% endif %}
+{% endif %}
+{% endblock %}

@@ -39,6 +39,5 @@ def process_listening_answers(student, passage, questions, post_data):
         student=student, passage=passage
     )
     correct_rate = number_of_correct / number_of_problems if number_of_problems else 0.0
-    print(f"correct_rate in process_listening_answers: {correct_rate:.4f}")
     obj.update_review_priority_by_solving(correct_rate=correct_rate)
     return results

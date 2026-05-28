@@ -1,5 +1,6 @@
 import openai
 from django.conf import settings
+from processors.openai_models import OpenAIModel
 
 # ログ出力用
 import logging
@@ -45,12 +46,12 @@ class ChemicalExplanationProcessor:
 
             # ChatGPTにリクエスト
             response = self.openai_client.chat.completions.create(
-                model="gpt-4",
+                model=OpenAIModel.SHORT_TASK,
                 messages=[
                     {"role": "system", "content": "あなたは化学に詳しい教育アシスタントです。簡潔でわかりやすい説明を心がけてください。"},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=1000,
+                max_completion_tokens=1000,
                 temperature=0.5
             )
             text = response.choices[0].message.content.strip()

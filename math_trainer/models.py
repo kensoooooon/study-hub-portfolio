@@ -105,7 +105,14 @@ class ProblemType(models.Model):
 
 class ProblemSessionQuerySet(models.QuerySet):
     def visible_to(self, user):
-        qs = self  # ← 受け取った self を活かす（ここが重要）
+        """
+        ProblemSession群のうち、ユーザーに見せて良いものを返す補助メソッド
+
+        Notes:
+            - 現在は冒頭でアクティブを挟んでいるので、非アクティブ生徒のものは一切表示されない
+            - 将来的に、非アクティブ生徒のものを閲覧したくなった場合は、visible_to(self, user, include_inactive=False)とシグネチャを変更すること
+        """
+        qs = self.with_active_student()  # アクティブ生徒に限定
 
         if not getattr(user, "is_authenticated", False):
             return qs.none()
@@ -118,14 +125,18 @@ class ProblemSessionQuerySet(models.QuerySet):
 
         role_obj = user.get_role_object() if hasattr(user, "get_role_object") else None
         if role == "teacher" and role_obj:
-            return qs.filter(student__in=role_obj.get_students())
+            return qs.filter(student__teachers=role_obj)
         if role == "classroom_administrator" and role_obj:
-            return qs.filter(student__classrooms__in=role_obj.classrooms.all()).distinct()
+            # return qs.filter(student__classrooms__in=role_obj.classrooms.all()).distinct()
+            return qs.filter(student__classrooms__in=role_obj.classrooms).distinct()
         if role == "organization_administrator" and role_obj:
-            return qs.filter(student__classrooms__organization__in=role_obj.organizations.all()).distinct()
+            return qs.filter(student__organization__in=role_obj.organizations.all()).distinct()
+
 
         return qs.none()
-
+    
+    def with_active_student(self):
+        return self.filter(student__is_active=True)
 
 
 class ProblemSession(models.Model):
@@ -160,6 +171,9 @@ class ProblemSession(models.Model):
         Notes:
             getattr()を繰り返し用いることで、動作の停止ではなくFalseで返すことを重視
         """
+        if not self.student.is_active:  # 生徒がアクティブでない場合無条件で扱えない
+            return False
+
         # 未ログイン
         if not getattr(user, "is_authenticated", False):
             return False

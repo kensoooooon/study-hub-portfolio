@@ -62,7 +62,13 @@ def quiz_review_for_student(request):
             )
             return error_handling_to_quiz_error(request, status=404)
         logctx["student_id"] = str(getattr(student, "id", ""))
-        
+
+        step = "textbook_existence_check"
+        if not student.textbook_id:
+            logger.warning("教科書が存在していません。 step=%s ctx=%s", step, logctx)
+            error_message = "教科書が未登録のため、クイズは利用できません。"
+            return error_handling_to_quiz_type_select(request, error_message)
+
         step = "get_and_decide_context"
         word_meaning_context = pick_review_context_by_softmax(student)
         if word_meaning_context is None:

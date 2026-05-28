@@ -109,6 +109,19 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"未定義の品詞: {part_of_speech_jp}"))
             return
 
+        # 無効化状態の教科書は取り込みを行わない=更新が行われないとみなす
+        inactive = Textbook.objects.inactive().filter(
+            name=textbook_name,
+            grade=grade,
+            publication_year=publication_year,
+        ).first()
+        if inactive:
+            self.stdout.write(self.style.WARNING(
+                f"スキップ: '{textbook_name}' 中{grade}年（{publication_year}年度）は"
+                f"無効状態のためインポートを中断します。"
+            ))
+            return
+
         textbook, _ = Textbook.objects.get_or_create(
             name=textbook_name,
             grade=grade,

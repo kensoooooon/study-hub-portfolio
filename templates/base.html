@@ -45,6 +45,10 @@
                                 {% if perms.line_channels.manage_line_channels %}
                                 <li><a class="dropdown-item" href="{% url 'line_channels:list' %}">LINEチャンネル（更新可）</a></li>
                                 {% endif %}
+
+                                {% if perms.accounts.view_organization %}
+                                <li><a class="dropdown-item" href="{% url 'ops_organization:list' %}">管理組織一覧</a></li>
+                                {% endif %}
                             </ul>
                         </li>
                         {% endif %}

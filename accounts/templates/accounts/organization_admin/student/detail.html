@@ -44,13 +44,18 @@
             
             {% if user.role == 'classroom_administrator' or user.role == 'organization_administrator' or user.role == 'teacher' %}
                 <div class="mt-4">
-                    <!-- ✅ 管理者・講師用クイズ開始ボタン -->
-                    <form method="post" action="{% url 'vocab_trainer:quiz_type_select_with_admin' %}" class="mt-3">
-                        {% csrf_token %}
-                        <input type="hidden" name="target_student_id" value="{{ student.id }}">
-                        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
-                        <button type="submit" class="btn btn-warning">英単語テストを開始（管理者・講師用）</button>
-                    </form>                    
+                    {% if student.textbook %}
+                        <form method="post" action="{% url 'vocab_trainer:quiz_type_select_with_admin' %}" class="mt-3">
+                            {% csrf_token %}
+                            <input type="hidden" name="target_student_id" value="{{ student.id }}">
+                            <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+                            <button type="submit" class="btn btn-warning">英単語テストを開始（管理者・講師用）</button>
+                        </form>
+                    {% else %}
+                        <div class="alert alert-warning small mt-3">
+                            教科書が未登録のため、英単語テストは利用できません。先に生徒情報から教科書を登録してください。
+                        </div>
+                    {% endif %}
                 </div>
                 <div class="mt-4">
                     <!-- ✅ 管理者・講師用長文読解開始ボタン -->

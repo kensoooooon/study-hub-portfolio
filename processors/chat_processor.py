@@ -4,6 +4,7 @@ from pylatexenc.latex2text import LatexNodes2Text
 
 # 環境変数用
 from django.conf import settings
+from processors.openai_models import OpenAIModel
 
 # ユーザーログ読み取り用
 from conversations.models import MessageLog
@@ -100,9 +101,9 @@ class ChatProcessor:
             )
             conversation_context.append({"role": "user", "content": prompt})
             api_response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=OpenAIModel.CHAT,
                 messages=conversation_context,
-                max_tokens=2000,
+                max_completion_tokens=2000,
                 temperature=0.2
             )
             raw_text = api_response.choices[0].message.content.strip()
@@ -187,9 +188,9 @@ class ChatProcessor:
 
             # ChatGPTにリクエスト
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=OpenAIModel.CHAT,
                 messages=conversation_context,
-                max_tokens=150,
+                max_completion_tokens=150,
                 temperature=0.7
             )
             return response.choices[0].message.content.strip()

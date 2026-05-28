@@ -2,15 +2,33 @@ from django.views import View
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.core import signing
-from accounts.models import Student
+from django.conf import settings
 
 import requests
 
 from line_channels.models import LineChannel, KeyKind
 from line_channels.services import get_secret
+from accounts.models import Student
+
 
 # CSRF有効のまま（テンプレに {% csrf_token %} あり）
 class RegisterNameView(View):
+    def _get_student_or_403(self, line_user_id: str):
+        """取得可能な生徒を取得する
+
+        Args:
+            line_user_id (str): 対象生徒のLINEユーザーID
+
+        Returns:
+            tuple(Optional[Student], Optional[HttpResponse]): 生徒とエラー発生時はエラーレスポンス
+        """
+        student, _ = Student.objects.get_or_create(line_user_id=line_user_id)
+
+        if not student.is_active:
+            return None, HttpResponse("アカウントが無効化されています。", status=403)
+
+        return student, None
+
     def _load_token(self, request, line_user_id):
         token = request.GET.get("t") or request.POST.get("t")
         if not token:
@@ -49,8 +67,9 @@ class RegisterNameView(View):
         except Exception as e:
             return HttpResponse(str(e), status=400)
 
-        student, _ = Student.objects.get_or_create(line_user_id=line_user_id)
-
+        student, error_response = self._get_student_or_403(line_user_id)
+        if error_response:
+            return error_response
         # ★ 組織整合性をここで確定
         if student.organization_id is None:
             student.organization_id = org.id
@@ -76,8 +95,9 @@ class RegisterNameView(View):
         except Exception as e:
             return HttpResponse(str(e), status=400)
 
-        student, _ = Student.objects.get_or_create(line_user_id=line_user_id)
-
+        student, error_response = self._get_student_or_403(line_user_id)
+        if error_response:
+            return error_response
         # ★ 組織整合性（POST側でも再チェック）
         if student.organization_id is None:
             student.organization_id = org.id
@@ -95,6 +115,8 @@ class RegisterNameView(View):
 
         student.username = f"{last_name} {first_name}"
         student.save(update_fields=["username"])
+        if not student.password:
+            student.set_default_password()
 
         try:
             access_token = get_secret(ch, KeyKind.ACCESS_TOKEN).decode().strip()

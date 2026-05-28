@@ -14,8 +14,6 @@ import logging
 # 曜日と時間の並び替え
 from django.db.models import Case, When
 
-# アクセス制御
-from accounts.models import OrganizationAdministrator, ClassroomAdministrator, Teacher
 
 # 追加 import（ファイル先頭の方）
 from line_channels.models import LineChannel, KeyKind
@@ -23,6 +21,9 @@ from line_channels.services import get_secret
 
 # pubsubのtopic読み出し用
 from django.conf import settings
+
+from line_integration.services.learning_links import build_line_message
+from study_reminder.services.learning_link_availability import check_learning_link_availability
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,38 @@ class StudyReminderQuerySet(models.QuerySet):
     """
     曜日→時間の並び替え実現
     """
+    def active(self):
+        """
+        アクティブなリマインダーを返す
+        """
+        return self.filter(is_active=True)
+
+    def with_active_student(self):
+        """
+        生徒がアクティブなリマインダーを返す
+        """
+        return self.filter(student__is_active=True)
+
+    def notifiable_in_slot(self, *, day_of_week, start_time, end_time, target_date):
+        """
+        リマインダー自体も紐づいている生徒もアクティブなもののうち、
+        指定曜日・指定時刻スロットに該当し、
+        かつ target_date 時点でまだ通知されていないものを返す
+        """
+        return (
+            self.active()
+            .with_active_student()
+            .filter(
+                day_of_week=day_of_week,
+                time_of_day__gte=start_time,
+                time_of_day__lt=end_time,
+            )
+            .filter(
+                models.Q(last_notified__lt=target_date) |
+                models.Q(last_notified__isnull=True)
+            )
+        )
+
     def ordered_by_day_and_time(self):
         return self.order_by(
             Case(
@@ -56,6 +89,7 @@ class StudyReminderQuerySet(models.QuerySet):
         - 教室管理者: 自身が管理する教室に所属する生徒のリマインダー＋可能なら organization でも絞り込み
         - 講師      : 自身が担当している生徒のリマインダー＋可能なら organization でも絞り込み
         """
+        qs= self.with_active_student()  # アクティブな生徒が紐づいているもののみ表示
         role = getattr(user, "role", None)
 
         # 🏢 組織管理者
@@ -65,14 +99,14 @@ class StudyReminderQuerySet(models.QuerySet):
                 orgs = admin.organizations.all()
                 if orgs.exists():
                     # 生徒の所属 organization を軸に絞り込み
-                    return self.filter(student__organization__in=orgs)
+                    return qs.filter(student__organization__in=orgs)
             return self.none()
 
         # 🏫 教室管理者
         elif role == 'classroom_administrator':
             admin = getattr(user, 'classroomadministrator', None)
             if admin:
-                qs = self.filter(student__classrooms__in=admin.classrooms.all())
+                qs = qs.filter(student__classrooms__in=admin.classrooms.all())
                 # ClassroomAdministrator.organization が入っている場合は
                 # 組織でも二重に絞り込んで防御を厚くする
                 org = getattr(admin, 'organization', None)
@@ -84,11 +118,14 @@ class StudyReminderQuerySet(models.QuerySet):
         # 👨‍🏫 講師
         elif role == 'teacher':
             # まずは「担当している生徒」に紐づくリマインダー
-            qs = self.filter(student__teachers=user)
+            teacher = user.get_role_object()
+            if teacher is None:
+                return self.none()
+            qs = qs.filter(student__teachers=teacher)
 
             # Teacher.organization が設定済みなら、組織でも絞る
             # （Teacher.organization が None の既存データは現状の挙動を維持）
-            org = getattr(user, 'organization', None)
+            org = getattr(teacher, 'organization', None)
             if org is not None:
                 qs = qs.filter(student__organization=org)
             return qs
@@ -98,6 +135,20 @@ class StudyReminderQuerySet(models.QuerySet):
 
 
 class StudyReminder(models.Model):
+    class LearningLinkDestination(models.TextChoices):
+        """
+        LearningLink先を規程する
+
+        Note:
+            line_integration/learning_links.pyを参照元とし、あちらに存在しないものは追加しないこと
+        """
+        NONE               = "",                "リンクなし"
+        STUDENT_HOME       = "student_home",       "生徒ホーム"
+        READ_TEXTBOOK      = "read_textbook",      "リーディング・教科書"
+        READ_EIKEN         = "read_eiken",         "リーディング・英検"
+        LISTENING_TEXTBOOK = "listening_textbook", "リスニング・教科書"
+        LISTENING_EIKEN    = "listening_eiken",    "リスニング・英検"
+
     student = models.ForeignKey(
         Student,
         on_delete=models.CASCADE,
@@ -136,7 +187,15 @@ class StudyReminder(models.Model):
         blank=True,
         help_text="このリマインダーが最後に通知された日付を記録します。重複通知を防止します。"
     )
-    
+    learning_link_destination = models.CharField(
+        max_length=50,
+        choices=LearningLinkDestination.choices,
+        blank=True,
+        default=LearningLinkDestination.NONE,
+        verbose_name="学習リンク",
+        help_text="通知メッセージに追加する学習リンク",
+    )
+
     objects = StudyReminderQuerySet.as_manager() # 時系列の並び替え実現
     
     def __str__(self):
@@ -188,14 +247,24 @@ class StudyReminder(models.Model):
             )
             return False
 
-        # 3. メッセージ本文生成（従来通り）
+        # 3. メッセージ本文生成
         chat_processor = ChatProcessor(self.student)
-        message_content = MessageService.generate_message(self, chat_processor)
+        full_message = MessageService.generate_message(self, chat_processor)
+
+        if self.learning_link_destination:
+            availability = check_learning_link_availability(
+                self.student, self.learning_link_destination
+            )
+            if availability.allowed:
+                learning_link = build_line_message(self.learning_link_destination)
+                full_message += f"\n\n{learning_link}"
+            else:
+                logger.warning("学習リンクをスキップ: %s", availability.reason)
 
         # 4. Pub/Sub に送る attributes を構築
         attributes = {
             "line_user_id": self.student.line_user_id,
-            "custom_message": self.custom_message or message_content,
+            "custom_message": full_message,
             "access_token": access_token,  # ★ ここがマルチチャンネル対応の肝
         }
 

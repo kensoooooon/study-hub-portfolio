@@ -129,6 +129,23 @@ class AdminReadingQuizDispatcherViewTests(BaseAdminReadingQuizTest):
             response, "read_trainer/for_admin/generation_failed.html"
         )
 
+    def test_inactive_student_cannot_access(self):
+        """
+        非アクティブ生徒はアクセス不可
+        """
+        self.client.logout()
+        inactive_student = Student.objects.create_user(
+            email="inactive_student@example.com",
+            password="pass123456",
+            line_user_id="inactive_student_line_user_id",
+            is_active=False
+        )
+        self.client.force_login(inactive_student)
+        url = reverse("read_trainer:quiz_admin_dispatch")
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 302)
+        resp = self.client.post(url)
+        self.assertEqual(resp.status_code, 302) 
 
 class AdminReadingQuizSolveViewTests(BaseAdminReadingQuizTest):
     """
@@ -146,6 +163,34 @@ class AdminReadingQuizSolveViewTests(BaseAdminReadingQuizTest):
         )
         self.question = ReadingQuestion.objects.create(
             passage=self.passage,
+            question_text="What is this?",
+            option_a="A1",
+            option_b="B1",
+            option_c="C1",
+            option_d="D1",
+            correct_option="A",
+            explanation="説明",
+            batch_id=3,
+        )
+        self.other_question = ReadingQuestion.objects.create(
+            passage=self.passage,
+            question_text="Other question?",
+            option_a="A2",
+            option_b="B2",
+            option_c="C2",
+            option_d="D2",
+            correct_option="B",
+            explanation="別説明",
+            batch_id=4,
+        )
+        self.eiken_passage = ReadingPassage.objects.create(
+            title="テスト長文",
+            content="This is a test eiken passage.",
+            created_by=self.student,
+            source_type="eiken",
+        )
+        self.eiken_question = ReadingQuestion.objects.create(
+            passage=self.eiken_passage,
             question_text="What is this?",
             option_a="A1",
             option_b="B1",
@@ -179,7 +224,7 @@ class AdminReadingQuizSolveViewTests(BaseAdminReadingQuizTest):
             {
                 "classroom_id": str(self.classroom.id),
                 "student_id": str(self.student.id),
-                "is_eiken": "1",
+                "is_eiken": "0",
                 "batch_id": "3",
                 # 実際の実装では question_{id} の形式
                 f"question_{self.question.id}": "A",
@@ -221,6 +266,134 @@ class AdminReadingQuizSolveViewTests(BaseAdminReadingQuizTest):
         self.assertTemplateUsed(
             response, "read_trainer/for_admin/scoring_failed.html"
         )
+    
+    # claude
+    def test_get_with_teacher_display_quiz(self):
+        """
+        アクセス権を持つ講師のアクセスであれば、正しくクイズ画面が表示される処理が行われる
+        """
+        data = {
+            "is_eiken": "0",
+            "batch_id": "3",
+            "classroom_id": self.classroom.id,
+        }
+        url = reverse("read_trainer:admin_solve", args=[self.passage.id])
+        resp = self.client.get(
+            url,
+            data=data
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "read_trainer/for_admin/solve.html")
+        self.assertEqual(resp.context["passage"].id, self.passage.id)
+        self.assertEqual(resp.context["student"].id, self.student.id)
+        self.assertEqual(resp.context["classroom_id"], str(self.classroom.id))
+        self.assertEqual(list(resp.context["questions"]), [self.question])
+        self.assertNotIn(self.other_question, resp.context["questions"])
+        self.assertEqual(resp.context["batch_id"], 3)
+        self.assertFalse(resp.context["is_eiken"])
+
+    def test_get_without_batch_id_displays_all_questions(self):
+        """
+        バッチIDの指定がない場合は生成失敗用のテンプレートが利用される
+        """
+        url = reverse("read_trainer:admin_solve", args=[self.passage.id])
+
+        resp = self.client.get(
+            url,
+            data={
+                "is_eiken": "0",
+                "classroom_id": str(self.classroom.id),
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "read_trainer/for_admin/generation_failed.html")
+
+    def test_is_eiken_1_make_source_type_eiken(self):
+        """
+        is_eikenが1で指定されれば、ソースタイプが英検のものが取得される
+        """
+        url = reverse("read_trainer:admin_solve", args=[self.eiken_passage.id])
+
+        resp = self.client.get(
+            url,
+            data={
+                "is_eiken": "1",
+                "classroom_id": str(self.classroom.id),
+                "batch_id": "3"
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "read_trainer/for_admin/solve.html")
+        self.assertEqual(resp.context["passage"].id, self.eiken_passage.id)
+        self.assertEqual(resp.context["student"].id, self.student.id)
+        self.assertEqual(resp.context["classroom_id"], str(self.classroom.id))
+        self.assertEqual(list(resp.context["questions"]), [self.eiken_question])
+        self.assertEqual(resp.context["batch_id"], 3)
+        self.assertTrue(resp.context["is_eiken"])
+
+    def test_different_source_type_raise_404(self):
+        """
+        英検かどうかと、長文のIDが一致していない場合は404
+        """
+        url = reverse("read_trainer:admin_solve", args=[self.passage.id])
+
+        resp = self.client.get(
+            url,
+            data={
+                "is_eiken": "1",
+                "classroom_id": str(self.classroom.id),
+                "batch_id": "3"
+            },
+        )
+
+        self.assertEqual(resp.status_code, 404)
+    
+    def test_student_cannot_access(self):
+        """
+        生徒はたとえ自分自身の作成した長文を対象にしていても、アクセス不可
+        """
+        student = Student.objects.create_user(
+            email="student@example.com",
+            password="pass123456",
+            line_user_id="student_line_user_id"
+        )
+        passage = ReadingPassage.objects.create(
+                    title="テスト長文",
+                    content="This is a test passage.",
+                    created_by=student,
+                    source_type="textbook",
+                )
+        self.client.logout()
+        ok = self.client.login(email="student@example.com", password="pass123456")
+        self.assertTrue(ok)
+        url = reverse("read_trainer:admin_solve", args=[passage.id])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 403)
+        resp = self.client.post(url)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_teacher_and_admins_cannot_access_inactive_student(self):
+        """
+        非アクティブ生徒が作成した長文にはアクセス不可
+        """
+        inactive_student = Student.objects.create_user(
+            email="inactive_student@example.com",
+            password="pass123456",
+            line_user_id="inactive_student_line_user_id"
+        )
+        passage = ReadingPassage.objects.create(
+                    title="テスト長文",
+                    content="This is a test passage.",
+                    created_by=inactive_student,
+                    source_type="textbook",
+                )
+        url = reverse("read_trainer:admin_solve", args=[passage.id])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 404)
+        resp = self.client.post(url, data={"student_id": inactive_student.id})
+        self.assertEqual(resp.status_code, 404)
 
 
 class AdminReadingQuizResultViewTests(BaseAdminReadingQuizTest):
@@ -256,6 +429,19 @@ class AdminReadingQuizResultViewTests(BaseAdminReadingQuizTest):
         クイズ選択画面にリダイレクトされる
         """
         url = reverse("read_trainer:admin_result")
+
+        response = self.client.get(
+            url,
+            {
+                "classroom_id": str(self.classroom.id),
+                "target_student_id": str(self.student.id),
+                "is_eiken": "0",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        expected = reverse("read_trainer:quiz_type_select_with_admin")
+        self.assertIn(expected, response.url)
+
         response = self.client.get(
             url,
             {
@@ -264,7 +450,6 @@ class AdminReadingQuizResultViewTests(BaseAdminReadingQuizTest):
                 "is_eiken": "1",
             },
         )
-
         self.assertEqual(response.status_code, 302)
         expected = reverse("read_trainer:eiken_quiz_type_select_with_admin")
         self.assertIn(expected, response.url)
@@ -280,7 +465,7 @@ class AdminReadingQuizResultViewTests(BaseAdminReadingQuizTest):
             "passage_id": self.passage.id,
             "classroom_id": str(self.classroom.id),
             "student_id": str(self.student.id),
-            "is_eiken": True,
+            "is_eiken": False,
             "audio_file_names": "test.mp3",
             "batch_id": 5,
             "result_data": [

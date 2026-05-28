@@ -3,17 +3,9 @@
 # 問題と設計の思想
 モデル構造より、長文と問題は1:M構成
 出題は4問1セットとなっており、バッチIDで管理を行う
-
-# 各種関数群
-- generate_and_save_passage_with_questions
-    長文の新規作成と問題の新規作成。バッチIDは常に新規であるため1
-
-- append_questions_to_existing_passage
-    与えられた既存の長文に対し、新たな問題を作成。バッチIDはすでに紐づいたIDよりも1だけ大きいものを設定
-
-- select_latest_existing_passage_and_batch
-    ランダムに長文を選び、その中での最新のバッチIDが付与された問題を通す
 """
+from django.db import transaction
+
 from listening_trainer.models import ListeningPassage, ListeningQuestion
 from processors.listening_passage_generator import ListeningPassageGenerator, EikenListeningPassageGenerator
 
@@ -28,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 valid_choices = {"A", "B", "C", "D"}
 
+@transaction.atomic
 def generate_and_save_passage_with_questions(student: Student, vocab_contexts: list[WordMeaningContext]) -> tuple[ListeningPassage, int]:
     """
     学習済み語彙情報から長文と問題（questions）を新規生成し、DB に保存する。
@@ -68,7 +61,7 @@ def generate_and_save_passage_with_questions(student: Student, vocab_contexts: l
             raw_answer = q.get("answer", "").strip().upper()
 
             if raw_answer not in valid_choices:
-                logger.error("無効な正答値: raw_answer: %d, → スキップされました", raw_answer)
+                logger.error("無効な正答値: raw_answer: %s, → スキップされました", raw_answer)
                 raise ValueError(f"[Error] 無効な正答値: '{raw_answer}' → 問題生成に失敗しました")
             ListeningQuestion.objects.create(
                 passage=passage,
@@ -88,6 +81,7 @@ def generate_and_save_passage_with_questions(student: Student, vocab_contexts: l
     return passage, batch_id
 
 
+@transaction.atomic
 def append_questions_to_existing_passage(student, passage, vocab_contexts):
     """
     既存の長文 (passage) に新しい問題を追加し、新しい batch_id を自動採番して保存。
@@ -128,22 +122,12 @@ def append_questions_to_existing_passage(student, passage, vocab_contexts):
     return passage, next_batch
 
 
-def select_latest_existing_passage_and_batch(student):
-    """
-    ランダムに既存の長文を1つ選択し、その中で最新の batch_id を取得する。
-    """
-    passage = ListeningPassage.objects.filter(created_by=student).order_by('?').first()
-    if passage is None:
-        return None, None
-    latest_batch = passage.questions.order_by('-batch_id').first().batch_id
-    return passage, latest_batch
-
 def get_latest_batch_for_passage(passage: ListeningPassage) -> int | None:
     """指定された長文に対して、最新のbatch_idを取得し返す"""
     latest = passage.questions.order_by('-batch_id').first()
     return latest.batch_id if latest else None
 
-
+@transaction.atomic
 def generate_eiken_passage_with_questions(student, level: str, vocab_contexts=None):
     generator = EikenListeningPassageGenerator(student, level, vocab_contexts)
     result = generator.generate_passage_with_questions()
@@ -186,6 +170,7 @@ def generate_eiken_passage_with_questions(student, level: str, vocab_contexts=No
     return passage, batch_id
 
 
+@transaction.atomic
 def append_questions_to_existing_eiken_passage(student, passage, level, vocab_contexts):
     generator = EikenListeningPassageGenerator(student, level, vocab_contexts)
     questions = generator.generate_questions_for_existing_passage(passage)

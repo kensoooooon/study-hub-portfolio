@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}組織管理者割当確認{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'ops_organization:list' %}">組織一覧</a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{% url 'ops_organization:detail' org.id %}">組織詳細</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">組織管理者割当確認</li>
+    </ol>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<div class="container mt-4">
+    {% if selected_admins %}
+    <form method="post" action="{% url 'ops_organization:assign_admin_confirm' pk=org.id %}">
+        {% csrf_token %}
+        {% for admin in selected_admins %}
+        <p>{{ admin.username }}</p>
+        <input type="hidden" name="admin_ids" value="{{ admin.pk }}">
+        {% endfor %}
+        <p>を組織管理者に追加します。</p>
+        <button type="submit" id="executeBtn">実行</button>
+    </form>
+    {% else %}
+    <p>割り当て対象がありません（戻って再選択してください）。</p>
+    {% endif %}
+</div>
+
+<a href="{% url 'ops_organization:detail' org.id %}" class="btn btn-secondary mt-2">戻る</a>
+{% endblock %}
+
+{% block script %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('executeBtn');
+            if (!btn) return;
+            const form = btn.closest('form');
+            if (!form) return;
+            form.addEventListener('submit', () => { btn.disabled = true; });
+        });
+    </script>
+{% endblock %}

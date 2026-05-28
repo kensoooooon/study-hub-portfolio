@@ -6,13 +6,11 @@ import logging
 # OIDC認証
 from auth.oidc_verify import require_oidc_token
 
-from django.conf import settings
-
 logger = logging.getLogger(__name__)
 
 
 @csrf_exempt
-@require_oidc_token(audience=settings.OIDC_AUDIENCE)
+@require_oidc_token(audience="https://django-study-hub.an.r.appspot.com")
 def update_review_priority(request):
     """
     Google Cloud Scheduler で毎週 review_priority を再計算する

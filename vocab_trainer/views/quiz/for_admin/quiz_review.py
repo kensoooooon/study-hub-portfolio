@@ -71,7 +71,12 @@ def quiz_review_with_admin(request):
         logctx["student_id_from_input"] = student_id_from_input
         student = get_accessible_student_by_uuid_or_404(request.user, student_id_from_input)
         logctx["student_id_from_db"] = student.id
-        
+
+        step = "textbook_existence_check"
+        if not student.textbook_id:
+            logger.warning("教科書が存在していません。 step=%s ctx=%s", step, logctx)
+            return error_handling_to_textbook_not_found(request, status=400)
+
         step = "get_classroom_id"
         classroom_id = request.POST.get('classroom_id') or request.GET.get("classroom_id")
         if not classroom_id:

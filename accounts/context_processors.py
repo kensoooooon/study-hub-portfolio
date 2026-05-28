@@ -1,7 +1,9 @@
 from django.urls import reverse
-from accounts.models import Student
-
 from django.conf import settings
+
+from accounts.models import Student
+from accounts.selectors import visible_students_qs
+
 
 def homepage_url(request):
     """
@@ -30,16 +32,15 @@ def unassigned_students_count(request):
     """
     未割り当ての生徒の数をコンテキストに追加
     """
-    if request.user.is_authenticated and request.user.role == 'organization_administrator':
-        org_admin = request.user.get_role_object()
-        all_organizations = org_admin.organizations.all()
-        unassigned_students_count_number = Student.objects.filter(
+    user = request.user
+    if user.is_authenticated and user.role == "organization_administrator":
+        student_qs = visible_students_qs(user)
+        unassigned_students_count = student_qs.filter(
             classrooms__isnull=True,
             line_user_id__isnull=False,
-            organization__in=all_organizations
         ).count()
-        return {'unassigned_student_count': unassigned_students_count_number}
-    return {'unassigned_student_count': 0}
+        return {"unassigned_student_count": unassigned_students_count}
+    return {"unassigned_student_count": 0}  # 組織管理者以外には見せない
 
 
 def debug_mode(request):
