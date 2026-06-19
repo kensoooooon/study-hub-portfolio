@@ -196,7 +196,7 @@ INSTALLED_APPS = [
     'listening_trainer',  # リスニング問題
     'math_trainer',  # 数学問題
     'text_scheduler',  # 教材管理
-    'line_channels',  # ラインの機密情報
+    'line_channels',  # LINEチャネル管理アプリ（KMSによるエンベロープ暗号化でシークレットを管理）
 ]
 
 MIDDLEWARE = [

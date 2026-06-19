@@ -14,6 +14,7 @@ from .invitation_models import (
     InvitationRole,
     SendStatus
 )
+from .student_email_registration_models import StudentEmailRegistrationToken
 
 __all__ = [
     'BaseUser',
@@ -25,5 +26,6 @@ __all__ = [
     'Organization',
     'Invitation',
     'InvitationRole',
-    'SendStatus'
+    'SendStatus',
+    'StudentEmailRegistrationToken',
 ]
