@@ -157,5 +157,4 @@ Early on, I added features based on what I thought was needed. The result: I now
 | Django apps | 11 |
 | Models | 40+ |
 | Subjects | English vocabulary, listening, reading, mathematics (chemistry and classical Japanese in development) |
-| User roles | 4 (Organization Admin / Classroom Admin / Teacher / Student) |
-| Status | Live, multiple organizations |
+| User roles | 4 (Organization Admin / Classroom Admin / Teacher / Student)
