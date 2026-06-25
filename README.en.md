@@ -1,5 +1,7 @@
 # Django Study Hub — AI-Powered Educational SaaS
 
+> **Note:** This is a sanitized version of a production codebase. Client-specific configurations and production credentials have been removed. The full development history (Issues and commits) is maintained in a private repository; commits here represent milestone syncs of working features.
+
 ## Problem & Context
 
 I work at a small tutoring operation in Japan. We set up an official LINE channel so students could ask questions — but it didn't work.
