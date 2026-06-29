@@ -255,17 +255,3 @@ class VisibleStudentsTest(TestCase):
         self.assertIn(self.student1, qs)
         self.assertEqual(qs.filter(pk=self.student1.pk).count(), 1)
         self.assertEqual(qs.count(), 2)
-
-    def test_org_admin_cannot_see_student_without_organization(self):
-        """
-        組織に所属していない生徒は見えない
-        """
-        no_org_student = Student.objects.create_user(
-            username="No Org Student",
-            email="no_org_student@example.com",
-            password="pass123456",
-            organization=None,
-        )
-        no_org_student.classrooms.add(self.classroom1)
-        qs = visible_students_qs(self.org_admin1)
-        self.assertNotIn(no_org_student, qs)

@@ -32,13 +32,13 @@ def load_invitation_id_from_token(*, token: str) -> int:
     # トークンの有効性チェック
     try:
         data = signing.loads(token, salt=SALT, max_age=EXPIRE_SECONDS)
-    except signing.BadSignature as e:
-        logger.warning("トークンの署名が不正です。")
-        raise InvalidTokenError("不正なトークンです。") from e
     except signing.SignatureExpired as e:
         logger.warning("トークンの期限が切れています。")
         raise InvalidTokenError("不正なトークンです。") from e
-    
+    except signing.BadSignature as e:
+        logger.warning("トークンの署名が不正です。")
+        raise InvalidTokenError("不正なトークンです。") from e
+
     # 値が存在するか否か
     if not isinstance(data, dict):
         logger.warning("トークンの形式が不正です。")
@@ -140,6 +140,7 @@ def create_org_admin(*, username: str, email: str, password: str, organization: 
         username=username,
         email=email,
         role=InvitationRole.ORG_ADMIN,
+        is_first_login=False,
     )
     user.set_password(password)
     user.save()

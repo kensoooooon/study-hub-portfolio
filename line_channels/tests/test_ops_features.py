@@ -37,6 +37,7 @@ def _create_user(*, email: str, role="teacher", username="U", password="testpass
         password=password,
         role=role,
         username=username,
+        is_first_login=False,
     )
 
 

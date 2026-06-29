@@ -77,7 +77,8 @@ class VisibleInactiveStudentQsTest(TestCase):
         cls.class1_2_admin = ClassroomAdministrator.objects.create_user(
             username="class1_2_admin",
             email="class1_2_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
         cls.class1_2_admin.classrooms.add(cls.class1_2)
         cls.class1_2_active_student = Student.objects.create_user(

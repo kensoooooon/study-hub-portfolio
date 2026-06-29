@@ -1,23 +1,31 @@
 from django.test import TestCase
-from accounts.models import Student, Teacher, ClassroomAdministrator, OrganizationAdministrator
+from accounts.models import Student, Teacher, ClassroomAdministrator, OrganizationAdministrator, Organization
 
 class StudentModelTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.org = Organization.objects.create(name="Test Org")
+
     def test_create_student_with_email(self):
-        student = Student.objects.create_user(email="student@example.com", password="password123", username="Test Student")
+        student = Student.objects.create_user(email="student@example.com", password="password123", username="Test Student", organization=self.org)
         self.assertEqual(student.email, "student@example.com")
         self.assertTrue(student.check_password("password123"))
         self.assertEqual(student.role, "student")
         self.assertEqual(student.username, "Test Student")
 
     def test_create_student_without_email(self):
-        student = Student.objects.create_user(username="No Email Student", password="password123")
+        student = Student.objects.create_user(username="No Email Student", password="password123", organization=self.org)
         self.assertIsNone(student.email)
         self.assertEqual(student.username, "No Email Student")
 
 
 class TeacherModelTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.org = Organization.objects.create(name="Test Org")
+
     def test_create_teacher(self):
-        teacher = Teacher.objects.create_user(email="teacher@example.com", password="password123", username="Test Teacher")
+        teacher = Teacher.objects.create_user(email="teacher@example.com", password="password123", username="Test Teacher", organization=self.org)
         self.assertEqual(teacher.email, "teacher@example.com")
         self.assertTrue(teacher.check_password("password123"))
         self.assertEqual(teacher.role, "teacher")
@@ -25,11 +33,16 @@ class TeacherModelTest(TestCase):
 
 
 class ClassroomAdministratorModelTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.org = Organization.objects.create(name="Test Org")
+
     def test_create_classroom_administrator(self):
         admin = ClassroomAdministrator.objects.create_user(
             email="classroom_admin@example.com",
             password="password123",
-            username="Classroom Admin"
+            username="Classroom Admin",
+            organization=self.org,
         )
         self.assertEqual(admin.email, "classroom_admin@example.com")
         self.assertTrue(admin.check_password("password123"))

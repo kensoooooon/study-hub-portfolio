@@ -111,10 +111,7 @@ def visible_students_qs(user: BaseUser, base_qs: QuerySet[Student] | None = None
         if role_obj is None:
             return qs.none()
         orgs = role_obj.organizations.all()
-        return qs.filter(
-            Q(organization__in=orgs)
-            | Q(organization__isnull=True, classrooms__organization__in=orgs)
-        ).distinct()
+        return qs.filter(Q(organization__in=orgs)).distinct()
 
     if role == "classroom_administrator":
         role_obj = _safe_role_obj(user, role, ClassroomAdministrator)

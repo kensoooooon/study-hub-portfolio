@@ -21,7 +21,7 @@
         {% endif %}
         {% if student_id %}
         <li class="breadcrumb-item">
-            <a href="{% url 'organization_admin:student_detail' student_id %}?classroom_id={{ classroom_id }}">生徒詳細</a>
+            <a href="{% url 'organization_admin:student_detail' student_id %}{% if classroom_id %}?classroom_id={{ classroom_id }}{% endif %}">生徒詳細</a>
         </li>
         {% endif %}
         <li class="breadcrumb-item active" aria-current="page">リマインダー作成</li>

@@ -34,7 +34,7 @@ class UnassignedStudentListTest(TestCase):
         cls.org_admin1 = OrganizationAdministrator.objects.create_user(
             username="Org Admin1",
             email="org_admin1@example.com",
-            password="pass123456"
+            password="pass123456",
         )
         cls.org_admin1.organizations.add(cls.org1)
 
@@ -44,7 +44,8 @@ class UnassignedStudentListTest(TestCase):
             username="Classroom Admin1",
             email="classroom_admin1@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.classroom_admin1.classrooms.add(cls.classroom1)
         
@@ -54,6 +55,7 @@ class UnassignedStudentListTest(TestCase):
             email="teacher1@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.teacher1.classrooms.add(cls.classroom1)
 
@@ -63,7 +65,8 @@ class UnassignedStudentListTest(TestCase):
             email="student1@example.com",
             password="pass123456",
             organization=cls.org1,
-            line_user_id="line_user_id_student1"
+            line_user_id="line_user_id_student1",
+            is_first_login=False,
         )
         cls.student1.classrooms.add(cls.classroom1)
         cls.student1.teachers.add(cls.teacher1)
@@ -74,7 +77,7 @@ class UnassignedStudentListTest(TestCase):
             email="student1_2@example.com",
             password="pass123456",
             organization=cls.org1,
-            line_user_id="line_user_id_student1_2"
+            line_user_id="line_user_id_student1_2",
         )
         cls.student1_2.teachers.add(cls.teacher1)
 
@@ -84,7 +87,7 @@ class UnassignedStudentListTest(TestCase):
         cls.org_admin2 = OrganizationAdministrator.objects.create_user(
             username="Org Admin2",
             email="org_admin2@example.com",
-            password="pass123456"
+            password="pass123456",
         )
         cls.org_admin2.organizations.add(cls.org2)
 
@@ -94,7 +97,7 @@ class UnassignedStudentListTest(TestCase):
             username="Classroom Admin2",
             email="classroom_admin2@example.com",
             password="pass123456",
-            organization=cls.org2
+            organization=cls.org2,
         )
         cls.classroom_admin2.classrooms.add(cls.classroom2)
 
@@ -113,7 +116,7 @@ class UnassignedStudentListTest(TestCase):
             email="student2@example.com",
             password="pass123456",
             organization=cls.org2,
-            line_user_id="line_user_id_student2"
+            line_user_id="line_user_id_student2",
         )
         cls.student2.classrooms.add(cls.classroom2)
         cls.student2.teachers.add(cls.teacher2)
@@ -124,7 +127,7 @@ class UnassignedStudentListTest(TestCase):
             email="student2_2@example.com",
             password="pass123456",
             organization=cls.org2,
-            line_user_id="line_user_id_student2_2"
+            line_user_id="line_user_id_student2_2",
         )
         cls.student2_2.teachers.add(cls.teacher2)
 

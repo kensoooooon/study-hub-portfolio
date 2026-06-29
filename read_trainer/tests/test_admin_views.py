@@ -33,6 +33,7 @@ class BaseAdminReadingQuizTest(TestCase):
             password="testpass",
             role="teacher",
             organization=self.org,
+            is_first_login=False,
         )
         self.teacher.classrooms.add(self.classroom)
 
@@ -138,6 +139,7 @@ class AdminReadingQuizDispatcherViewTests(BaseAdminReadingQuizTest):
             email="inactive_student@example.com",
             password="pass123456",
             line_user_id="inactive_student_line_user_id",
+            organization=self.org,
             is_active=False
         )
         self.client.force_login(inactive_student)
@@ -357,7 +359,9 @@ class AdminReadingQuizSolveViewTests(BaseAdminReadingQuizTest):
         student = Student.objects.create_user(
             email="student@example.com",
             password="pass123456",
-            line_user_id="student_line_user_id"
+            line_user_id="student_line_user_id",
+            organization=self.org,
+            is_first_login=False,
         )
         passage = ReadingPassage.objects.create(
                     title="テスト長文",
@@ -381,8 +385,12 @@ class AdminReadingQuizSolveViewTests(BaseAdminReadingQuizTest):
         inactive_student = Student.objects.create_user(
             email="inactive_student@example.com",
             password="pass123456",
-            line_user_id="inactive_student_line_user_id"
+            line_user_id="inactive_student_line_user_id",
+            organization=self.org,
+            is_active=False,
         )
+        inactive_student.classrooms.add(self.classroom)
+        inactive_student.teachers.add(self.teacher)
         passage = ReadingPassage.objects.create(
                     title="テスト長文",
                     content="This is a test passage.",

@@ -157,7 +157,7 @@ class ReminderEditView(LoginRequiredMixin, UpdateView):
         # すでに設定されている曜日、時間、メッセージを初期値として設定
         initial['day_of_week'] = reminder.day_of_week
         initial['time_of_day'] = reminder.time_of_day.strftime('%H:%M')
-        initial['custom_message'] = reminder.custom_message or "ChatGPTの自動メッセージ"
+        initial['custom_message'] = reminder.custom_message
 
         return initial
 
@@ -277,6 +277,8 @@ class ReminderCreateView(LoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         student_id = self.request.GET.get('student')
         classroom_id = self.request.GET.get('classroom_id')
+        if classroom_id == 'None':
+            classroom_id = None
         if student_id:
             context['student_id'] = student_id
         if classroom_id:

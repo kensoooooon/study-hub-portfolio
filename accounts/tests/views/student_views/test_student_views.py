@@ -31,6 +31,7 @@ class StudentViewsTest(TestCase):
             password="pass123456",
             organization=cls.org,
             textbook=cls.textbook,
+            is_first_login=False,
         )
 
         cls.student.classrooms.add(cls.classroom)
@@ -49,6 +50,7 @@ class StudentViewsTest(TestCase):
             email="teacher1@example.com",
             password="pass123456",
             organization=cls.org,
+            is_first_login=False,
         )
         cls.teacher.classrooms.add(cls.classroom)
 
@@ -57,6 +59,7 @@ class StudentViewsTest(TestCase):
             email="classroom_admin1@example.com",
             password="pass123456",
             organization=cls.org,
+            is_first_login=False,
         )
         cls.classroom_admin.classrooms.add(cls.classroom)
 
@@ -64,6 +67,7 @@ class StudentViewsTest(TestCase):
             username="org_admin1",
             email="org_admin1@example.com",
             password="pass123456",
+            is_first_login=False,
         )
         cls.org_admin.organizations.add(cls.org)
 

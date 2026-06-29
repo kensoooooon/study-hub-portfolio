@@ -35,6 +35,7 @@ class BaseStudentReadingQuizTest(TestCase):
             password="studentpass",
             role="student",
             organization=self.org,
+            is_first_login=False,
         )
         self.student.classrooms.add(self.classroom)
 
@@ -131,12 +132,14 @@ class StudentReadingQuizDispatcherViewTests(BaseStudentReadingQuizTest):
         teacher = Teacher.objects.create_user(
             email="teacher@example.com",
             password="pass123456",
-            organization=self.org
+            organization=self.org,
+            is_first_login=False,
         )
         class_admin = ClassroomAdministrator.objects.create_user(
             email="class_admin@example.com",
             password="pass123456",
-            organization=self.org
+            organization=self.org,
+            is_first_login=False,
         )
         org_admin = OrganizationAdministrator.objects.create_user(
             email="org_admin@example.com",
@@ -168,6 +171,7 @@ class StudentReadingQuizDispatcherViewTests(BaseStudentReadingQuizTest):
             email="inactive_student@example.com",
             password="pass123456",
             line_user_id="inactive_student_line_user_id",
+            organization=self.org,
             is_active=False
         )
         self.client.force_login(inactive_student)
@@ -319,12 +323,14 @@ class StudentReadingQuizSolveViewTests(BaseStudentReadingQuizTest):
         teacher = Teacher.objects.create_user(
             email="teacher@example.com",
             password="pass123456",
-            organization=self.org
+            organization=self.org,
+            is_first_login=False,
         )
         class_admin = ClassroomAdministrator.objects.create_user(
             email="class_admin@example.com",
             password="pass123456",
-            organization=self.org
+            organization=self.org,
+            is_first_login=False,
         )
         org_admin = OrganizationAdministrator.objects.create_user(
             email="org_admin@example.com",
@@ -432,6 +438,7 @@ class StudentReadingQuizSolveViewTests(BaseStudentReadingQuizTest):
             email="inactive_student@example.com",
             password="pass123456",
             line_user_id="inactive_student_line_user_id",
+            organization=self.org,
             is_active=False
         )
         passage = ReadingPassage.objects.create(

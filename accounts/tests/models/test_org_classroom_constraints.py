@@ -282,11 +282,15 @@ class UnassignedStudentListViewTests(TestCase):
             email="teacher@example.com",
             username="Teacher",
             role="teacher",
+            is_first_login=False,
+            organization=self.org1,
         )
         classroom_admin = ClassroomAdministrator.objects.create(
             email="classroom_admin@example.com",
             username="ClassroomAdmin",
             role="classroom_administrator",
+            is_first_login=False,
+            organization=self.org1,
         )
         # teacherチェック
         self.client.force_login(teacher)

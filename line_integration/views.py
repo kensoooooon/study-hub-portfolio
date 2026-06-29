@@ -26,6 +26,8 @@ from line_channels.adapters import resolve_channel_and_verify, SignatureError, C
 from line_channels.services import get_secret
 from line_channels.models import KeyKind
 
+from accounts.services.student_email_registration import maybe_build_email_registration_response
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -113,16 +115,12 @@ class LineWebhookView(View):
             return "個人チャット以外からのメッセージは現在未対応です。"
 
         line_user_id = source["userId"]
-        user, created = Student.objects.get_or_create_user(line_user_id=line_user_id)
-    
-        # ① まだ所属が未決の新規ユーザーなら、このチャンネルの組織に“初回割当”
-        if user.organization_id is None:
-            user.organization_id = ch.organization_id
-            user.save(update_fields=["organization"])
+        user, created = Student.objects.get_or_create_user(
+            line_user_id=line_user_id,
+            organization_id=ch.organization_id,
+        )
 
-        # ② 所属が決まっているが、今回のチャンネルの組織と不一致なら拒否
-        elif user.organization_id != ch.organization_id:
-            # 返信する場合は replyToken があるはずなのでアクセストークンを使って返答可能
+        if user.organization_id != ch.organization_id:
             return (
                 "現在、別の教室アカウントでご利用中です。"
                 "ご所属のアカウントからご連絡いただくか、教室までお問い合わせください。"
@@ -145,6 +143,15 @@ class LineWebhookView(View):
                 reverse("user_register:register_name", args=[line_user_id])
             ) + f"?t={token}"
             return f"お名前を登録してください！以下のリンクをクリックしてください。\n{reg_url}"
+
+        # テキストメッセージかつメール登録コマンドなら ChatProcessor より先に処理する
+        if (event.get("message") or {}).get("type") == "text":
+            msg = (event.get("message") or {}).get("text", "")
+            email_reg_response = maybe_build_email_registration_response(
+                request=request, student=user, line_channel=ch, message_text=msg
+            )
+            if email_reg_response is not None:
+                return email_reg_response
 
         mtype = (event.get("message") or {}).get("type")
         handler = self.MESSAGE_HANDLERS.get(mtype)

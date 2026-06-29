@@ -184,65 +184,6 @@ class AdminListeningSolveViewTests(BaseAdminListeningQuizTest):
         self.assertEqual(res.status_code, 302)
         self.assertIn(reverse("listening_trainer:admin_result"), res.url)
 
-    @patch("listening_trainer.views.admin_views.process_listening_answers")
-    def test_cannot_access_unassigned_student(
-        self,
-        mock_process,
-    ):
-        """
-        たとえばデータが完全に揃っていたとしても、作成者たる生徒が管理組織に所属していない場合アクセス不可
-        """
-
-        # Student
-        student = Student.objects.create(
-            id=uuid4(),
-            username="Result Test",
-        )
-        student.classrooms.add(self.classroom)
-
-        # Passage（DBに作成）
-        passage = ListeningPassage.objects.create(
-            title="Listening Test Passage",
-            content="content",
-            created_by=student,
-            source_type="textbook",
-        )
-
-        # Question（DBに作成）
-        q = ListeningQuestion.objects.create(
-            passage=passage,
-            batch_id=3,
-            question_text="Q?",
-            option_a="A1",
-            option_b="B1",
-            option_c="C1",
-            option_d="D1",
-            correct_option="A",
-        )
-
-        # process_listening_answers の返り値
-        mock_process.return_value = [
-            {
-                "question": q,
-                "selected_option": "A",
-                "is_correct": True,
-                "target_student_id": str(student.id),
-                "classroom_id": str(self.classroom.id)
-            }
-        ]
-
-        url = reverse("listening_trainer:admin_solve", args=[passage.id])
-        res = self.client.post(url, {
-            "batch_id": "3",
-            "is_eiken": "0",
-            "student_id": str(student.id),          # ★必須
-            "classroom_id": str(self.classroom.id), # ★セッション保存にも使う
-            "audio_file_names": "",                 # ★任意（でも安全）
-            f"question_{q.id}": "A",
-        })
-
-        self.assertEqual(res.status_code, 404)  # ListeningPassageのvisible_toで、組織がないため弾かれる
-
     def test_cannot_access_inactive_student_solve_get(self):
         """
         非アクティブ生徒へはアクセス不可
@@ -494,12 +435,17 @@ class AdminListeningQuizResultViewTests(BaseAdminListeningQuizTest):
         # pop されていることを確認
         self.assertIsNone(self.client.session.get("listening_quiz_result"))
 
-    def test_result_view_cannot_accept_inactive_student(self):
+    @patch("listening_trainer.views.admin_views.passage_access_check")
+    def test_result_view_rejects_inactive_student_id_from_session_before_passage_lookup(
+        self,
+        mock_passage_access_check,
+    ):
         """
-        セッションに含まれる生徒が非アクティブの場合、アクセス不可
+        セッション内の student_id が非アクティブ生徒を指す場合、
+        passage の取得処理へ進む前に 404 となる。
         """
         active_student = Student.objects.create_user(
-            username="Result Test",
+            username="Active Student",
             email="result-test-active@example.com",
             password="testpass",
             organization=self.organization,
@@ -507,9 +453,8 @@ class AdminListeningQuizResultViewTests(BaseAdminListeningQuizTest):
         )
         active_student.classrooms.add(self.classroom)
 
-
         inactive_student = Student.objects.create_user(
-            username="Result Test",
+            username="Inactive Student",
             email="result-test-inactive@example.com",
             password="testpass",
             organization=self.organization,
@@ -524,7 +469,6 @@ class AdminListeningQuizResultViewTests(BaseAdminListeningQuizTest):
             source_type="textbook",
         )
 
-        # Question（実データ）
         q = ListeningQuestion.objects.create(
             passage=passage,
             batch_id=3,
@@ -536,8 +480,6 @@ class AdminListeningQuizResultViewTests(BaseAdminListeningQuizTest):
             correct_option="A",
         )
 
-
-        # セッションへ書き込み
         session = self.client.session
         session["listening_quiz_result"] = {
             "passage_id": passage.id,
@@ -560,6 +502,7 @@ class AdminListeningQuizResultViewTests(BaseAdminListeningQuizTest):
         res = self.client.get(url)
 
         self.assertEqual(res.status_code, 404)
+        mock_passage_access_check.assert_not_called()
 
 
 # ---------------------------------------------------------
@@ -582,7 +525,8 @@ class QuizTypeSelectWithAdminTest(TestCase):
             username="class1_1_admin",
             email="class1_1_admin@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_admin.classrooms.add(cls.class1_1)
         cls.class1_1_teacher = Teacher.objects.create_user(
@@ -590,6 +534,7 @@ class QuizTypeSelectWithAdminTest(TestCase):
             email="class1_1_teacher@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_teacher.classrooms.add(cls.class1_1)
 
@@ -599,7 +544,8 @@ class QuizTypeSelectWithAdminTest(TestCase):
             password="pass123456",
             organization=cls.org1,
             is_active=True,
-            line_user_id="line_id_class1_1_active_student"
+            line_user_id="line_id_class1_1_active_student",
+            is_first_login=False,
         )
         cls.class1_1_active_student.classrooms.add(cls.class1_1)
         cls.class1_1_active_student.teachers.add(cls.class1_1_teacher)
@@ -629,7 +575,8 @@ class QuizTypeSelectWithAdminTest(TestCase):
         cls.class1_2_admin = ClassroomAdministrator.objects.create_user(
             username="class1_2_admin",
             email="class1_2_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
         cls.class1_2_admin.classrooms.add(cls.class1_2)
         cls.class1_2_active_student = Student.objects.create_user(
@@ -886,7 +833,8 @@ class EikenQuizTypeSelectWithAdminTest(TestCase):
             username="class1_1_admin",
             email="class1_1_admin@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_admin.classrooms.add(cls.class1_1)
         cls.class1_1_teacher = Teacher.objects.create_user(
@@ -894,6 +842,7 @@ class EikenQuizTypeSelectWithAdminTest(TestCase):
             email="class1_1_teacher@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_teacher.classrooms.add(cls.class1_1)
 
@@ -903,7 +852,8 @@ class EikenQuizTypeSelectWithAdminTest(TestCase):
             password="pass123456",
             organization=cls.org1,
             is_active=True,
-            line_user_id="line_id_class1_1_active_student"
+            line_user_id="line_id_class1_1_active_student",
+            is_first_login=False,
         )
         cls.class1_1_active_student.classrooms.add(cls.class1_1)
         cls.class1_1_active_student.teachers.add(cls.class1_1_teacher)
@@ -933,7 +883,8 @@ class EikenQuizTypeSelectWithAdminTest(TestCase):
         cls.class1_2_admin = ClassroomAdministrator.objects.create_user(
             username="class1_2_admin",
             email="class1_2_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
         cls.class1_2_admin.classrooms.add(cls.class1_2)
         cls.class1_2_active_student = Student.objects.create_user(
@@ -1191,7 +1142,8 @@ class AdminListeningQuizDispatcherViewTest(TestCase):
             username="class1_1_admin",
             email="class1_1_admin@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_admin.classrooms.add(cls.class1_1)
         cls.class1_1_teacher = Teacher.objects.create_user(
@@ -1199,6 +1151,7 @@ class AdminListeningQuizDispatcherViewTest(TestCase):
             email="class1_1_teacher@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_teacher.classrooms.add(cls.class1_1)
 
@@ -1208,7 +1161,8 @@ class AdminListeningQuizDispatcherViewTest(TestCase):
             password="pass123456",
             organization=cls.org1,
             is_active=True,
-            line_user_id="line_id_class1_1_active_student"
+            line_user_id="line_id_class1_1_active_student",
+            is_first_login=False,
         )
         cls.class1_1_active_student.classrooms.add(cls.class1_1)
         cls.class1_1_active_student.teachers.add(cls.class1_1_teacher)
@@ -1238,7 +1192,8 @@ class AdminListeningQuizDispatcherViewTest(TestCase):
         cls.class1_2_admin = ClassroomAdministrator.objects.create_user(
             username="class1_2_admin",
             email="class1_2_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
         cls.class1_2_admin.classrooms.add(cls.class1_2)
         cls.class1_2_active_student = Student.objects.create_user(

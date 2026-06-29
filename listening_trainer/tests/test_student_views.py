@@ -32,6 +32,7 @@ class BaseStudentListeningQuizTest(TestCase):
             password="studentpass",
             role="student",
             organization=self.org,
+            is_first_login=False,
         )
         self.student.classrooms.add(self.classroom)
 
@@ -173,11 +174,13 @@ class StudentListeningQuizDispatcherViewTests(BaseStudentListeningQuizTest):
             email="teacher@example.com",
             password="pass123456",
             organization=self.org,
+            is_first_login=False,
         )
         class_admin = ClassroomAdministrator.objects.create_user(
             email="class_admin@example.com",
             password="pass123456",
             organization=self.org,
+            is_first_login=False,
         )
         org_admin = OrganizationAdministrator.objects.create_user(
             email="org_admin@example.com",
@@ -210,6 +213,7 @@ class StudentListeningQuizDispatcherViewTests(BaseStudentListeningQuizTest):
             email="inactive_student@example.com",
             password="pass123456",
             line_user_id="inactive_student_line_user_id",
+            organization=self.org,
             is_active=False,
         )
         self.client.force_login(inactive_student)
@@ -459,11 +463,13 @@ class StudentListeningQuizSolveViewTests(BaseStudentListeningQuizTest):
             email="teacher@example.com",
             password="pass123456",
             organization=self.org,
+            is_first_login=False,
         )
         class_admin = ClassroomAdministrator.objects.create_user(
             email="class_admin@example.com",
             password="pass123456",
             organization=self.org,
+            is_first_login=False,
         )
         org_admin = OrganizationAdministrator.objects.create_user(
             email="org_admin@example.com",
@@ -496,6 +502,7 @@ class StudentListeningQuizSolveViewTests(BaseStudentListeningQuizTest):
             email="inactive_student@example.com",
             password="pass123456",
             line_user_id="inactive_student_line_user_id",
+            organization=self.org,
             is_active=False,
         )
         inactive_passage = ListeningPassage.objects.create(
@@ -703,6 +710,7 @@ class StudentListeningQuizResultViewTests(BaseStudentListeningQuizTest):
             email="inactive_student@example.com",
             password="pass123456",
             line_user_id="inactive_student_line_user_id",
+            organization=self.org,
             is_active=False,
         )
         passage = ListeningPassage.objects.create(
@@ -762,11 +770,13 @@ class StudentListeningQuizResultViewTests(BaseStudentListeningQuizTest):
             email="teacher@example.com",
             password="pass123456",
             organization=self.org,
+            is_first_login=False,
         )
         class_admin = ClassroomAdministrator.objects.create_user(
             email="class_admin@example.com",
             password="pass123456",
             organization=self.org,
+            is_first_login=False,
         )
         org_admin = OrganizationAdministrator.objects.create_user(
             email="org_admin@example.com",

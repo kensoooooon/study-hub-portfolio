@@ -59,7 +59,8 @@ class AdminBothQuizTypeSelectTest(TestCase):
             username="class1_1_admin",
             email="class1_1_admin@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_admin.classrooms.add(cls.class1_1)
         cls.class1_1_teacher = Teacher.objects.create_user(
@@ -67,6 +68,7 @@ class AdminBothQuizTypeSelectTest(TestCase):
             email="class1_1_teacher@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_teacher.classrooms.add(cls.class1_1)
 
@@ -76,7 +78,8 @@ class AdminBothQuizTypeSelectTest(TestCase):
             password="pass123456",
             organization=cls.org1,
             is_active=True,
-            line_user_id="line_id_class1_1_active_student"
+            line_user_id="line_id_class1_1_active_student",
+            is_first_login=False,
         )
         cls.class1_1_active_student.classrooms.add(cls.class1_1)
         cls.class1_1_active_student.teachers.add(cls.class1_1_teacher)
@@ -252,15 +255,7 @@ class AdminBothQuizTypeSelectTest(TestCase):
         組織管理者は他の組織の生徒にアクセス不可
         """
         self.login_as_org_admin()
-        non_organization_student = Student.objects.create(
-            username="non_organization_student",
-            line_user_id="non_organization_student_line_user_id",
-        )
-        students = [
-            self.class2_active_student,
-            non_organization_student
-            ]
-        self.check_normal_and_eiken_with_students(students, expected_code=403)
+        self.check_normal_and_eiken_with_students([self.class2_active_student], expected_code=403)
 
     def test_classroom_admin_can_access_student_in_their_classroom(self):
         """
@@ -535,7 +530,8 @@ class StudentBothQuizTypeSelectTest(TestCase):
             username="class1_1_admin",
             email="class1_1_admin@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_admin.classrooms.add(cls.class1_1)
         cls.class1_1_teacher = Teacher.objects.create_user(
@@ -543,6 +539,7 @@ class StudentBothQuizTypeSelectTest(TestCase):
             email="class1_1_teacher@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_teacher.classrooms.add(cls.class1_1)
 
@@ -552,7 +549,8 @@ class StudentBothQuizTypeSelectTest(TestCase):
             password="pass123456",
             organization=cls.org1,
             is_active=True,
-            line_user_id="line_id_class1_1_active_student"
+            line_user_id="line_id_class1_1_active_student",
+            is_first_login=False,
         )
         cls.class1_1_active_student.classrooms.add(cls.class1_1)
         cls.class1_1_active_student.teachers.add(cls.class1_1_teacher)

@@ -35,8 +35,8 @@
 
 <form method="post">
     {% csrf_token %}
-    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
     <button type="submit" class="btn btn-danger">削除する</button>
-    <a href="{% url 'organization_admin:student_detail' object.pk %}?classroom_id={{ classroom_id }}" class="btn btn-secondary">キャンセル</a>
+    <a href="{% url 'organization_admin:student_detail' object.pk %}{% if classroom_id %}?classroom_id={{ classroom_id }}{% endif %}" class="btn btn-secondary">キャンセル</a>
 </form>
 {% endblock %}

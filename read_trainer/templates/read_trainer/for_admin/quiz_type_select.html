@@ -35,7 +35,7 @@
     {% csrf_token %}
     <input type="hidden" name="quiz_type" value="new">
     <input type="hidden" name="target_student_id" value="{{ student.id }}">
-    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
     <button type="submit" class="btn btn-success" data-loading-text="生成中...">🆕 新しい長文で出題</button>
 </form>
 
@@ -44,7 +44,7 @@
     <form method="post" action="{% url 'read_trainer:quiz_admin_dispatch' %}" class="mt-4" data-disable-on-submit="true">
     {% csrf_token %}
     <input type="hidden" name="target_student_id" value="{{ student.id }}">
-    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
 
     <h4>復習モードを選択してください</h4>
     <div class="form-check">

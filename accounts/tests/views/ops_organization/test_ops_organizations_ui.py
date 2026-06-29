@@ -18,6 +18,7 @@ def _create_user(
     role: str = "teacher",
     username: str = "U",
     password: str = "testpass123",
+    is_first_login: bool = False,
 ):
     User = get_user_model()
     return User.objects.create_user(
@@ -25,6 +26,7 @@ def _create_user(
         password=password,
         role=role,
         username=username,
+        is_first_login=is_first_login,
     )
 
 

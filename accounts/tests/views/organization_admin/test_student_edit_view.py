@@ -49,14 +49,16 @@ class StudentEditViewTest(TestCase):
             username="class_admin",
             password="pass123456",
             role="classroom_administrator",
-            organization=cls.org
+            organization=cls.org,
+            is_first_login=False,
         )
         cls.class_admin.classrooms.add(cls.classroom1)
 
         cls.teacher = Teacher.objects.create_user(
             email="teacher@example.com",
             password="pass123456",
-            organization=cls.org
+            organization=cls.org,
+            is_first_login=False,
         )
 
         cls.student_user = Student.objects.create_user(
@@ -64,6 +66,7 @@ class StudentEditViewTest(TestCase):
             password="pass123456",
             line_user_id="student_user_line_id",
             organization=cls.org,
+            is_first_login=False,
         )
 
         # チェック対象生徒
@@ -97,6 +100,7 @@ class StudentEditViewTest(TestCase):
             email="target_student4@example.com",
             password="pass123456",
             line_user_id="target_student4_line_id",
+            organization=cls.org,
             is_active=False
         )
 

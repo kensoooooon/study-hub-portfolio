@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 
-from accounts.models import Student, Teacher, ClassroomAdministrator, OrganizationAdministrator
+from accounts.models import Student, Teacher, ClassroomAdministrator, OrganizationAdministrator, Organization
 
 
 class EmailNormalizationTests(TestCase):
@@ -17,10 +17,13 @@ class EmailNormalizationTests(TestCase):
         self.assertEqual(u.email, "sampleincludinguppercase@example.com")
 
     def test_subclass_create_user_normalizes_email(self):
+        org = Organization.objects.create(name="Test Org")
+
         t = Teacher.objects.create_user(
             email="TeAcher@Example.COM",
             password="pass123",
             username="Teacher",
+            organization=org,
         )
         self.assertEqual(t.email, "teacher@example.com")
 
@@ -28,6 +31,7 @@ class EmailNormalizationTests(TestCase):
             email="CA@Example.COM",
             password="pass123",
             username="CA",
+            organization=org,
         )
         self.assertEqual(ca.email, "ca@example.com")
 
@@ -39,10 +43,12 @@ class EmailNormalizationTests(TestCase):
         self.assertEqual(oa.email, "oa@example.com")
 
     def test_student_email_can_be_none_and_stays_none(self):
+        org = Organization.objects.create(name="Test Org")
         s = Student.objects.create_user(
             email=None,
             password="pass123",
             username="Student",
+            organization=org,
         )
         self.assertIsNone(s.email)
 

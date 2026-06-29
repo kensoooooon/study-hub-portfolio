@@ -13,19 +13,19 @@
 
 {% block content %}
 <a class="btn btn-outline-primary"
-    href="{% url 'math_trainer:common:score' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">
+    href="{% url 'math_trainer:common:score' %}?student_id={{ student_id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">
         採点へ
 </a>
 <div class="container-fluid">
     <ul class="list-group center-block" style="max-width: 800px;">
-        <li class="list-group-item"><a href="{% url 'math_trainer:elementary2:problem_select' %}?student_id={{ student_id }}&classroom_id={{ classroom_id }}">小2の計算練習</a><br>(時計)</li>
+        <li class="list-group-item"><a href="{% url 'math_trainer:elementary2:problem_select' %}?student_id={{ student_id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">小2の計算練習</a><br>(時計)</li>
     </ul>
     <br>
     <ul class="list-group center-block" style="max-width: 800px;">
-        <li class="list-group-item"><a href="{% url 'math_trainer:junior_high1:problem_select' %}?student_id={{ student_id }}&classroom_id={{ classroom_id }}">中1の計算練習</a><br>(1次方程式)</li>
+        <li class="list-group-item"><a href="{% url 'math_trainer:junior_high1:problem_select' %}?student_id={{ student_id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">中1の計算練習</a><br>(1次方程式)</li>
     </ul>
     <ul class="list-group center-block" style="max-width: 800px;">
-        <li class="list-group-item"><a href="{% url 'math_trainer:junior_high2:problem_select' %}?student_id={{ student_id }}&classroom_id={{ classroom_id }}">中2の計算練習</a><br>(連立方程式)</li>
+        <li class="list-group-item"><a href="{% url 'math_trainer:junior_high2:problem_select' %}?student_id={{ student_id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">中2の計算練習</a><br>(連立方程式)</li>
     </ul>
 </div>
 {% endblock %}

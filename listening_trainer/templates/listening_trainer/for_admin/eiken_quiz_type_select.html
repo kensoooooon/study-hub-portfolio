@@ -36,7 +36,7 @@
 <form method="post" action="{% url 'listening_trainer:quiz_admin_dispatch' %}" class="mb-4" data-disable-on-submit="true">
     {% csrf_token %}
     <input type="hidden" name="target_student_id" value="{{ student.id }}">
-    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
     <input type="hidden" name="quiz_type" value="eiken_new">
 
     <div class="mb-3">
@@ -58,7 +58,7 @@
     <form method="post" action="{% url 'listening_trainer:quiz_admin_dispatch' %}" class="mb-4" data-disable-on-submit="true">
     {% csrf_token %}
     <input type="hidden" name="target_student_id" value="{{ student.id }}">
-    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
 
     <div class="mb-3">
         <label for="eikenLevelReuse" class="form-label">英検レベル（復習）</label>

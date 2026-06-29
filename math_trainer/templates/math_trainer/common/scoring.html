@@ -130,10 +130,10 @@
     {% else %}
         <h1 class="mb-4">採点フォーム</h1>
         <form method="post"
-            action="{% url 'math_trainer:common:score' %}?classroom_id={{ classroom_id }}&student_id={{ student_id }}">
+            action="{% url 'math_trainer:common:score' %}?student_id={{ student_id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">
 
         {% csrf_token %}
-        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+        {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
         <input type="hidden" name="student_id" value="{{ student_id }}">
         <input type="hidden" name="session_id" value="{{ session.id }}">
         {% regroup instances by session as grouped %}

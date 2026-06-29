@@ -81,7 +81,8 @@ class StudentAccessCheck(TestCase):
         cls.class1_2_admin = ClassroomAdministrator.objects.create_user(
             username="class1_2_admin",
             email="class1_2_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
         cls.class1_2_admin.classrooms.add(cls.class1_2)
         cls.class1_2_active_student = Student.objects.create_user(
@@ -264,34 +265,34 @@ class StudentAccessCheck(TestCase):
         with self.assertRaises(Http404):
             student = student_access_check(org_admin, non_existent_student_id)
 
-def test_student_role_with_non_student_role_object_cause_403(self):
-    """
-    studentロールなのに role_obj が Student でなければアクセス不可
-    """
-    student_user = self.class1_1_active_student
-    student_user.get_role_object = Mock(return_value=self.class1_1_teacher)  # get_role_objectが講師オブジェクトを返すように
+    def test_student_role_with_non_student_role_object_cause_403(self):
+        """
+        studentロールなのに role_obj が Student でなければアクセス不可
+        """
+        student_user = self.class1_1_active_student
+        student_user.get_role_object = Mock(return_value=self.class1_1_teacher)  # get_role_objectが講師オブジェクトを返すように
 
-    with self.assertRaises(PermissionDenied):
-        student_access_check(student_user, student_user.id)
+        with self.assertRaises(PermissionDenied):
+            student_access_check(student_user, student_user.id)
 
-def test_unexpected_role_cause_403(self):
-    """
-    想定外ロールはアクセス不可
-    """
-    user = Mock()
-    user.is_authenticated = True
-    user.id = uuid.uuid4()
-    user.role = "unexpected_role"
-    user.get_role_object = Mock(return_value=Mock())
+    def test_unexpected_role_cause_403(self):
+        """
+        想定外ロールはアクセス不可
+        """
+        user = Mock()
+        user.is_authenticated = True
+        user.id = uuid.uuid4()
+        user.role = "unexpected_role"
+        user.get_role_object = Mock(return_value=Mock())
 
-    with self.assertRaises(PermissionDenied):
-        student_access_check(user, self.class1_1_active_student.id)
+        with self.assertRaises(PermissionDenied):
+            student_access_check(user, self.class1_1_active_student.id)
 
-def test_none_student_id_cause_403(self):
-    """
-    生徒IDがNoneでもアクセス不可
-    """
-    org_admin = self.org1_admin
+    def test_none_student_id_cause_403(self):
+        """
+        生徒IDがNoneでもアクセス不可
+        """
+        org_admin = self.org1_admin
 
-    with self.assertRaises(PermissionDenied):
-        student_access_check(org_admin, None)
+        with self.assertRaises(PermissionDenied):
+            student_access_check(org_admin, None)

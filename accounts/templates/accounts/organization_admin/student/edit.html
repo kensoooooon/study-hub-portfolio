@@ -21,7 +21,7 @@
         {% endif %}
         {% if student_id %}
         <li class="breadcrumb-item">
-            <a href="{% url 'organization_admin:student_detail' student_id %}?classroom_id={{classroom_id}}">生徒詳細</a>
+            <a href="{% url 'organization_admin:student_detail' student_id %}{% if classroom_id %}?classroom_id={{ classroom_id }}{% endif %}">生徒詳細</a>
         </li>
         {% endif %}
         <li class="breadcrumb-item active" aria-current="page">生徒情報編集</li>
@@ -35,15 +35,15 @@
 
 <form method="post" class="mt-4">
     {% csrf_token %}
-    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
     {{ form.as_p }}
     <button type="submit" class="btn btn-primary">保存</button>
-    <a href="{% url 'organization_admin:student_detail' student.pk %}?classroom_id={{ classroom_id }}" class="btn btn-secondary">キャンセル</a>
+    <a href="{% url 'organization_admin:student_detail' student.pk %}{% if classroom_id %}?classroom_id={{ classroom_id }}{% endif %}" class="btn btn-secondary">キャンセル</a>
 </form>
 
 {% if user.role == 'organization_administrator' or user.role == 'classroom_administrator' %}
 <hr>
-<form method="post" action="{% url 'organization_admin:student_delete' student.pk %}?classroom_id={{ classroom_id }}" onsubmit="return confirm('本当に削除してよろしいですか？');">
+<form method="post" action="{% url 'organization_admin:student_delete' student.pk %}{% if classroom_id %}?classroom_id={{ classroom_id }}{% endif %}" onsubmit="return confirm('本当に削除してよろしいですか？');">
     {% csrf_token %}
     <button type="submit" class="btn btn-danger mt-3">生徒を削除</button>
 </form>

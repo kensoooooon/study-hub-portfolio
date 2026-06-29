@@ -5,12 +5,17 @@ from accounts.models import (
     Student,
     Teacher,
     ClassroomAdministrator,
-    OrganizationAdministrator
+    OrganizationAdministrator,
+    Organization,
 )
 from accounts.services.first_login import requires_first_login_password_change
 
 
 class RequiresFirstLoginPasswordChangeTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.org = Organization.objects.create(name="Test Org")
+
     def _make_user(
         self,
         role: str,
@@ -25,13 +30,17 @@ class RequiresFirstLoginPasswordChangeTests(TestCase):
         }
         user_model = role_mapping[role]
 
-        user = user_model.objects.create_user(
+        kwargs = dict(
             email=f"{role}_{is_first_login}_{is_superuser}@example.com",
             password="testpass123",
             username=f"{role}_{is_first_login}_{is_superuser}",
             is_first_login=is_first_login,
             is_superuser=is_superuser,
         )
+        if role in ("student", "teacher", "classroom_administrator"):
+            kwargs["organization"] = self.org
+
+        user = user_model.objects.create_user(**kwargs)
         return user
 
     def test_student_with_is_first_login_true(self):

@@ -48,7 +48,7 @@
                         <form method="post" action="{% url 'vocab_trainer:quiz_type_select_with_admin' %}" class="mt-3">
                             {% csrf_token %}
                             <input type="hidden" name="target_student_id" value="{{ student.id }}">
-                            <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+                            {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
                             <button type="submit" class="btn btn-warning">英単語テストを開始（管理者・講師用）</button>
                         </form>
                     {% else %}
@@ -62,7 +62,7 @@
                     <form method="post" action="{% url 'read_trainer:quiz_type_select_with_admin' %}" class="mt-3">
                         {% csrf_token%}
                         <input type="hidden" name="target_student_id" value="{{ student.id }}">
-                        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+                        {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
                         <button type="submit" class="btn btn-success" {% if not has_vocab_history %}disabled{% endif %}>教科書の長文読解トレーニングを開始（管理者・講師用）</button>
                     </form>
                 </div>
@@ -72,7 +72,7 @@
                     <form method="post" action="{% url 'read_trainer:eiken_quiz_type_select_with_admin' %}" class="mt-3">
                         {% csrf_token%}
                         <input type="hidden" name="target_student_id" value="{{ student.id }}">
-                        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+                        {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
                         <button type="submit" class="btn btn-success" {% if not has_vocab_history %}disabled{% endif %}>英検の長文読解トレーニングを開始（管理者・講師用）</button>
                     </form>
                 </div>
@@ -81,7 +81,7 @@
                     <!-- ✅ 管理者・講師用リスニングクイズ開始ボタン -->
                     <form method="get" action="{% url 'listening_trainer:quiz_type_select_with_admin' %}" class="mt-3">
                         <input type="hidden" name="target_student_id" value="{{ student.id }}">
-                        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+                        {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
                         <button type="submit" class="btn btn-info" {% if not has_vocab_history %}disabled{% endif %}>リスニングクイズを開始（管理者・講師用）</button>
                     </form>
                 </div>
@@ -89,7 +89,7 @@
                 <div class="mt-4">
                     <form method="get" action="{% url 'listening_trainer:eiken_quiz_type_select_with_admin' %}" class="mt-3">
                         <input type="hidden" name="target_student_id" value="{{ student.id }}">
-                        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+                        {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
                         <button type="submit" class="btn btn-info" {% if not has_vocab_history %}disabled{% endif %}>英検用リスニングクイズを開始（管理者・講師用）</button>
                     </form>
                 </div>
@@ -97,7 +97,7 @@
                 <div class="mt-4">
                     <form method="get" action="{% url 'math_trainer:index' %}" class="mt-3">
                         <input type="hidden" name="student_id" value="{{ student.id }}">
-                        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+                        {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
                         <button type="submit" class="btn btn-outline-warning">計算練習を開始（管理者・講師用）</button>
                     </form>
                 </div>
@@ -105,7 +105,7 @@
                 <div class="mt-4">
                     <form method="get" action="{% url 'text_scheduler:material_list' %}" class="mt-3">
                         <input type="hidden" name="student_id" value="{{ student.id }}">
-                        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+                        {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
                         <button type="submit" class="btn btn-success">教材スケジュール管理</button>
                     </form>
                 </div>
@@ -120,7 +120,7 @@
             </ul>
 
             {% if user.role == 'classroom_administrator' or user.role == 'organization_administrator' %}
-                <a href="{% url 'organization_admin:student_edit' student.pk %}?classroom_id={{ classroom_id }}" class="btn btn-primary mt-3">情報を編集する</a>
+                <a href="{% url 'organization_admin:student_edit' student.pk %}{% if classroom_id %}?classroom_id={{ classroom_id }}{% endif %}" class="btn btn-primary mt-3">情報を編集する</a>
             {% elif user.role == 'teacher' %}
                 <a href="{% url 'organization_admin:student_edit_for_teachers' student.pk %}?student_pk={{ student.pk }}" class="btn btn-info mt-3">情報を編集する</a>            
             {% endif %}
@@ -158,7 +158,7 @@
             </table>
 
             {% if user.role == 'classroom_administrator' or user.role == 'organization_administrator' or user.role == 'teacher' %}
-                <a href="{% url 'reminder_create' %}?student={{ student.id }}&classroom_id={{ classroom_id }}&next={{ request.get_full_path }}" class="btn btn-success mt-3">新規リマインダー作成</a>
+                <a href="{% url 'reminder_create' %}?student={{ student.id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}&next={{ request.get_full_path|urlencode }}" class="btn btn-success mt-3">新規リマインダー作成</a>
             {% endif %}
         </div>
     </div>

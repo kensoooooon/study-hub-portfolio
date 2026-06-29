@@ -1,27 +1,78 @@
-import pytest
+import datetime
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from text_scheduler.models import StudentUnitProgress, StudyLog
-from services import apply_study_log
+
+from accounts.models import Organization, Classroom, Teacher, Student
+from text_scheduler.models import LearningMaterial, StudentUnitProgress, StudyLog
+from text_scheduler.services import apply_study_log
 
 
-@pytest.mark.django_db
-def test_due_is_removed_after_review(client, student, material):
-    # 例: number=145 の due 状態を作る（StudentUnitProgress を直接セットでも可）
-    sup = StudentUnitProgress.objects.create(
-        student=student, material=material, number=145,
-        next_due_at=timezone.now() - timezone.timedelta(days=1),
-        repetition_count=1,
-    )
+class TestDueIsRemovedAfterReview(TestCase):
 
-    # 一覧（初回）→ 145 が表示される想定
-    resp1 = client.get(reverse("text_scheduler:material_list") + f"?student_id={student.id}")
-    assert "145" in resp1.content.decode()
+    def setUp(self):
+        org = Organization.objects.create(name="Org")
+        cls = Classroom.objects.create(name="Cls-1", organization=org)
 
-    # 復習を登録
-    log = StudyLog.objects.create(student=student, material=material, number=145, kind="review", quality=4)
-    apply_study_log(log)
+        self.teacher = Teacher.objects.create_user(
+            email="teacher@example.com",
+            password="pass",
+            role="teacher",
+            is_first_login=False,
+            organization=org,
+        )
+        self.teacher.classrooms.add(cls)
 
-    # 一覧（再アクセス）→ 145 が消えている
-    resp2 = client.get(reverse("text_scheduler:material_list") + f"?student_id={student.id}")
-    assert "145" not in resp2.content.decode()
+        self.student = Student.objects.create_user(
+            username="stu",
+            role="student",
+            organization=org,
+        )
+        self.student.classrooms.add(cls)
+        self.student.teachers.add(self.teacher)
+
+        self.material = LearningMaterial.objects.create(
+            target_student=self.student,
+            created_by=self.teacher,
+            title="テスト教材",
+            unit_label="番",
+            start_number=100,
+            end_number=200,
+            required_reviews=2,
+            estimated_minutes_per_unit=5,
+            start_date=timezone.localdate(),
+            goal_date=timezone.localdate() + datetime.timedelta(days=30),
+            buffer_weekdays=[],
+        )
+
+    def test_due_is_removed_after_review(self):
+        self.client.force_login(self.teacher)
+
+        StudentUnitProgress.objects.create(
+            student=self.student,
+            material=self.material,
+            number=145,
+            next_due_at=timezone.now() - datetime.timedelta(days=1),
+            repetition_count=1,
+        )
+
+        url = reverse("text_scheduler:material_list")
+        resp1 = self.client.get(url + f"?student_id={self.student.pk}")
+        self.assertEqual(resp1.status_code, 200)
+        self.assertIn("145", resp1.content.decode())
+
+        log = StudyLog.objects.create(
+            student=self.student,
+            material=self.material,
+            number=145,
+            kind="review",
+            quality=4,
+        )
+        apply_study_log(log)
+
+        resp2 = self.client.get(url + f"?student_id={self.student.pk}")
+        self.assertEqual(resp2.status_code, 200)
+        self.assertNotIn("145", resp2.content.decode())
+
+        self.assertContains(resp1, "番145")
+        self.assertNotContains(resp2, "番145")

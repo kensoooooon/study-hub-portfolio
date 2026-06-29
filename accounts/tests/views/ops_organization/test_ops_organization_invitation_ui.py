@@ -42,6 +42,7 @@ class OpsOrganizationInvitationCreateUITests(TestCase):
             email="operator@example.com",
             password="testpass123",
             username="Operator",
+            is_first_login=False,
         )
         _grant_invite_flow_perms(cls.operator)
         cls.operator.organizations.add(cls.org1)
@@ -50,6 +51,7 @@ class OpsOrganizationInvitationCreateUITests(TestCase):
             email="no_perm@example.com",
             password="testpass123",
             username="NoPerm",
+            is_first_login=False,
         )
 
     def login_operator(self):

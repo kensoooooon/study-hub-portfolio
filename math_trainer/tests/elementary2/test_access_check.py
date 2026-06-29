@@ -33,7 +33,8 @@ class ProblemSelectViewTest(TestCase):
             username="class1_1_admin",
             email="class1_1_admin@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_admin.classrooms.add(cls.class1_1)
         cls.class1_1_teacher = Teacher.objects.create_user(
@@ -41,6 +42,7 @@ class ProblemSelectViewTest(TestCase):
             email="class1_1_teacher@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_teacher.classrooms.add(cls.class1_1)
 
@@ -50,7 +52,8 @@ class ProblemSelectViewTest(TestCase):
             password="pass123456",
             organization=cls.org1,
             is_active=True,
-            line_user_id="line_id_class1_1_active_student"
+            line_user_id="line_id_class1_1_active_student",
+            is_first_login=False,
         )
         cls.class1_1_active_student.classrooms.add(cls.class1_1)
         cls.class1_1_active_student.teachers.add(cls.class1_1_teacher)
@@ -70,7 +73,8 @@ class ProblemSelectViewTest(TestCase):
         cls.class1_2_admin = ClassroomAdministrator.objects.create_user(
             username="class1_2_admin",
             email="class1_2_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
         cls.class1_2_admin.classrooms.add(cls.class1_2)
         cls.class1_2_active_student = Student.objects.create_user(
@@ -212,7 +216,7 @@ class ProblemSelectViewTest(TestCase):
         """
         role_objectがNoneである教室管理者はアクセス不可
         """
-        self.login_as_org_admin()
+        self.login_as_classroom_admin()
         mock_role_object.return_value = None
         url = reverse("math_trainer:elementary2:problem_select")
         resp = self.client.get(url, data={"student_id": self.class1_1_active_student.id})
@@ -251,7 +255,7 @@ class ProblemSelectViewTest(TestCase):
         self.assertEqual(resp.status_code, 404)
 
     @patch("accounts.models.BaseUser.get_role_object")
-    def test_classroom_admin_returning_none_cannot_access(self, mock_role_object):
+    def test_teacher_returning_none_cannot_access(self, mock_role_object):
         """
         role_objectがNoneである講師はアクセス不可
         """
@@ -318,7 +322,8 @@ class Grade2DisplayDispatcherViewTest(TestCase):
             username="class1_1_admin",
             email="class1_1_admin@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_admin.classrooms.add(cls.class1_1)
         cls.class1_1_teacher = Teacher.objects.create_user(
@@ -326,6 +331,7 @@ class Grade2DisplayDispatcherViewTest(TestCase):
             email="class1_1_teacher@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_teacher.classrooms.add(cls.class1_1)
 
@@ -335,7 +341,8 @@ class Grade2DisplayDispatcherViewTest(TestCase):
             password="pass123456",
             organization=cls.org1,
             is_active=True,
-            line_user_id="line_id_class1_1_active_student"
+            line_user_id="line_id_class1_1_active_student",
+            is_first_login=False,
         )
         cls.class1_1_active_student.classrooms.add(cls.class1_1)
         cls.class1_1_active_student.teachers.add(cls.class1_1_teacher)
@@ -365,7 +372,8 @@ class Grade2DisplayDispatcherViewTest(TestCase):
         cls.class1_2_admin = ClassroomAdministrator.objects.create_user(
             username="class1_2_admin",
             email="class1_2_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
         cls.class1_2_admin.classrooms.add(cls.class1_2)
         cls.class1_2_active_student = Student.objects.create_user(
@@ -778,7 +786,8 @@ class Grade2PrintDispatcherViewTest(TestCase):
             username="class1_1_admin",
             email="class1_1_admin@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_admin.classrooms.add(cls.class1_1)
         cls.class1_1_teacher = Teacher.objects.create_user(
@@ -786,6 +795,7 @@ class Grade2PrintDispatcherViewTest(TestCase):
             email="class1_1_teacher@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_teacher.classrooms.add(cls.class1_1)
 
@@ -795,7 +805,8 @@ class Grade2PrintDispatcherViewTest(TestCase):
             password="pass123456",
             organization=cls.org1,
             is_active=True,
-            line_user_id="line_id_class1_1_active_student"
+            line_user_id="line_id_class1_1_active_student",
+            is_first_login=False,
         )
         cls.class1_1_active_student.classrooms.add(cls.class1_1)
         cls.class1_1_active_student.teachers.add(cls.class1_1_teacher)
@@ -825,7 +836,8 @@ class Grade2PrintDispatcherViewTest(TestCase):
         cls.class1_2_admin = ClassroomAdministrator.objects.create_user(
             username="class1_2_admin",
             email="class1_2_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
         cls.class1_2_admin.classrooms.add(cls.class1_2)
         cls.class1_2_active_student = Student.objects.create_user(

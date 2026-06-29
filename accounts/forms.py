@@ -98,10 +98,6 @@ class AssignClassroomForm(forms.Form):
         if not org_admin or not org_admin.get_accessible_classrooms().filter(pk=classroom.pk).exists():
             raise forms.ValidationError("管理下にない教室が選択されています。")
 
-        # if student.organization is None:
-        #     # 旧データ移行中だけ許容するならここでは弾かず、saveで補完
-        #     return cleaned_data
-
         if student.organization_id != classroom.organization_id:
             raise forms.ValidationError(
                 "生徒の所属組織と教室の所属組織が一致していません。"
@@ -112,10 +108,6 @@ class AssignClassroomForm(forms.Form):
     def save(self):
         student: Student = self.cleaned_data["student"]
         classroom: Classroom = self.cleaned_data["classroom"]
-
-        if student.organization is None:
-            student.organization = classroom.organization
-            student.save(update_fields=["organization"])
 
         student.classrooms.add(classroom)
         return student
@@ -297,7 +289,12 @@ class AccountEditForm(forms.ModelForm):
         required=False,
         widget=forms.PasswordInput(attrs={"placeholder": "新しいパスワードを入力"}),
         label="新しいパスワード",
-        help_text="空白の場合は変更されません"
+        help_text="空白の場合は変更されません（初回ログイン時は必須）",
+    )
+    password_confirm = forms.CharField(
+        required=False,
+        widget=forms.PasswordInput(attrs={"placeholder": "パスワードを再入力"}),
+        label="パスワード（確認）",
     )
 
     class Meta:
@@ -307,12 +304,18 @@ class AccountEditForm(forms.ModelForm):
             'email': 'メールアドレス'
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.is_first_login:  # 初回パスワード変更時はメールアドレス変更させない(セキュリティ)
+            self.fields['email'].disabled = True
+
     def save(self, commit=True):
         user = super().save(commit=False)
         password = self.cleaned_data.get("password")
 
         if password:  # 空でない場合のみセット
             user.set_password(password)
+            user.is_first_login = False
         else:
             # 再取得して現在のハッシュ値を維持
             current_password = BaseUser.objects.get(pk=user.pk).password
@@ -321,25 +324,35 @@ class AccountEditForm(forms.ModelForm):
             user.save()
         return user
 
+    def _get_role_default_password(self, role: str) -> str | None:
+        if role == "student":
+            return getattr(settings, "STUDENT_DEFAULT_PASSWORD", None)
+        if role == "teacher":
+            return getattr(settings, "TEACHER_DEFAULT_PASSWORD", None)
+        # 教室管理者は現時点で正規UIから共用初期パスワード付きで作成しない。
+        # 権限が強いロールのため、新たな共用初期パスワードは追加せず、
+        # 後続Issueでメール招待による本人パスワード設定へ寄せる。
+        return None
+
     def clean(self):
         cleaned_data = super().clean()
         password = cleaned_data.get("password")
+        password_confirm = cleaned_data.get("password_confirm")
+        user = self.instance
 
-        default_passwords = [
-            getattr(settings, "STUDENT_DEFAULT_PASSWORD", ""),
-            getattr(settings, "TEACHER_DEFAULT_PASSWORD", "")
-        ]
-
-        # 🔒 初回ログイン時には強制的にパスワード変更を要求
-        if self.instance.is_first_login:
+        if user.is_first_login:
             if not password:
-                raise ValidationError("初回ログイン時は、パスワードを必ず変更してください。")
-            if password in default_passwords:
-                raise ValidationError("初回ログイン時には、デフォルトパスワード以外を設定してください。")
-        else:
-            # 通常時でもデフォルトパスワードは禁止（任意）
-            if password and password in default_passwords:
-                raise ValidationError("デフォルトパスワードと同じパスワードには変更できません。")
+                self.add_error("password", "初回ログイン時は、パスワードを必ず変更してください。")
+                return cleaned_data
+
+        if password:
+            if len(password) < 8:
+                self.add_error("password", "パスワードは8文字以上で入力してください。")
+            if password != password_confirm:
+                self.add_error("password_confirm", "パスワードが一致しません。")
+            default_pw = self._get_role_default_password(user.role)
+            if default_pw and password == default_pw:
+                self.add_error("password", "そのパスワードは使用できません。")
 
         return cleaned_data
 
@@ -422,6 +435,15 @@ class OrganizationAdminSelectForm(forms.Form):
         if admins.count() > MAX_ASSIGN:
             raise forms.ValidationError(f"一度に割り当てられる人数は最大 {MAX_ASSIGN} 人です。")
         return admins
+
+
+class StudentEmailRegistrationForm(forms.Form):
+    """LINE経由メール登録フォーム。検証はフォーマットのみ、正規化・衝突チェックはサービス側で行う。"""
+    email = forms.EmailField(
+        label="メールアドレス",
+        max_length=254,
+        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "例: taro@example.com"}),
+    )
 
 
 class OrganizationAdminInvitationCreateForm(forms.Form):

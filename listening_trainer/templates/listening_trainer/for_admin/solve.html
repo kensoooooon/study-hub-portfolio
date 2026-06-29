@@ -24,11 +24,11 @@
         {% endif %}
         {% if is_eiken %}
             <li class="breadcrumb-item">
-                <a href="{% url 'listening_trainer:eiken_quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">英検用リスニングクイズ選択</a>
+                <a href="{% url 'listening_trainer:eiken_quiz_type_select_with_admin' %}?target_student_id={{ student.id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">英検用リスニングクイズ選択</a>
             </li>
         {% else %}
             <li class="breadcrumb-item">
-                <a href="{% url 'listening_trainer:quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">教科書用リスニングクイズ選択</a>
+                <a href="{% url 'listening_trainer:quiz_type_select_with_admin' %}?target_student_id={{ student.id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">教科書用リスニングクイズ選択</a>
             </li>
         {% endif %}
         <li class="breadcrumb-item active" aria-current="page">リスニングクイズ問題</li>
@@ -80,7 +80,7 @@
         </div>
     {% endfor %}
     <input type="hidden" name="batch_id" value="{{ batch_id }}">
-    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
     <input type="hidden" name="student_id" value="{{ student.id }}">
     <input type="hidden" name="is_eiken" value="{{ is_eiken|yesno:'1,0' }}">
     <input type="hidden" name="audio_file_names" id="audio-file-names">
@@ -90,9 +90,9 @@
 
     <div class="d-flex justify-content-between mt-5">
         {% if is_eiken %}
-            <a href="{% url 'listening_trainer:eiken_quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">英検用リスニングクイズ選択</a>
+            <a href="{% url 'listening_trainer:eiken_quiz_type_select_with_admin' %}?target_student_id={{ student.id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">英検用リスニングクイズ選択</a>
         {% else %}
-            <a href="{% url 'listening_trainer:quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">教科書用リスニングクイズ選択</a>
+            <a href="{% url 'listening_trainer:quiz_type_select_with_admin' %}?target_student_id={{ student.id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">教科書用リスニングクイズ選択</a>
         {% endif %}
     </div>
 {% endblock %}

@@ -144,16 +144,32 @@ class StudentManager(BaseUserManager):
         return  self.get_queryset().inactive()
 
     def get_or_create_user(self, line_user_id, **extra_fields):
-        """
-        LINEユーザーIDをもとに生徒を取得または作成
+        """LINEユーザーIDを元に、生徒が存在すれば取得し、存在しなければ作成する。
+
+        Args:
+            line_user_id: 生徒のLINEユーザーID
+            **extra_fields: 新規作成時に設定する追加属性
+
+        Raises:
+            ValueError: LINEユーザーIDが与えられなかった場合
+
+        Returns:
+            tuple(Student, bool): 生徒と、新規作成されたかどうか
+
+        Notes:
+            - extra_fields は get_or_create() の defaults に渡される。
+            - そのため organization_id などの属性は新規作成時のみ設定され、既存 Student には反映されない。
         """
         if not line_user_id:
             raise ValueError("LINEユーザーIDが必要です")
 
-        student, created = self.get_or_create(line_user_id=line_user_id, defaults={
-            'role': 'student',
-            **extra_fields
-        })
+        student, created = self.get_or_create(
+            line_user_id=line_user_id,
+            defaults={
+                "role": "student",
+                **extra_fields,
+            },
+        )
         return student, created
 
 
@@ -224,7 +240,8 @@ class Student(BaseUser):
     organization = models.ForeignKey(
         'accounts.Organization',
         on_delete=models.PROTECT,  # 誤操作時に巻き込まれた削除されてしまうのを防止する
-        null=True, blank=True,  # 既存データの移行が済んだら、両方Falseが望ましい
+        null=False,
+        blank=False,
         related_name='students',
         verbose_name='所属組織'
     )
@@ -255,10 +272,9 @@ class Student(BaseUser):
                     {"classrooms": "生徒の所属組織と異なる組織の教室が含まれています。"}
                 )
 
-            # 🔐 講師側の所属組織との整合性チェック(担当とされる講師から、自身と同じ組織の所属するもの+所属組織がないものを弾く)
+            # 🔐 講師側の所属組織との整合性チェック
             invalid_teachers = self.teachers.exclude(
-                models.Q(organization=self.organization) |
-                models.Q(organization__isnull=True)  # ← 既存データ移行中は None は許容
+                models.Q(organization=self.organization)
             )
             if invalid_teachers.exists():
                 raise ValidationError(
@@ -280,7 +296,8 @@ class Teacher(BaseUser):
     organization = models.ForeignKey(
         'accounts.Organization',
         on_delete=models.PROTECT,
-        null=True, blank=True,  # 既存データ移行が済んだら False / False にしたい
+        null=False,
+        blank=False,
         related_name='teachers',
         verbose_name='所属組織'
     )
@@ -307,8 +324,6 @@ class Teacher(BaseUser):
         """
         担当生徒一覧かつ自身と同じ組織に所属している生徒を取得するメソッド
         """
-        if self.organization_id is None:
-            return self.students.none()
         return self.students.filter(
             is_active=True,
             organization=self.organization,
@@ -357,7 +372,8 @@ class ClassroomAdministrator(BaseUser):
     organization = models.ForeignKey(
         'accounts.Organization',
         on_delete=models.PROTECT,
-        null=True, blank=True,  # 移行完了後に False / False へ
+        null=False,
+        blank=False,
         related_name='classroom_administrators',
         verbose_name='所属組織'
     )

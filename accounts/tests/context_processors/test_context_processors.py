@@ -29,12 +29,13 @@ class ContextProcessorsTests(TestCase):
         request.user = user
         return request
 
-    def _make_base_user(self, *, role: str):
+    def _make_base_user(self, *, role: str, is_first_login: bool = False):
         return BaseUser.objects.create_user(
             email=f"{role}@example.com",
             password="testpass123",
             username=f"{role}_user",
             role=role,
+            is_first_login=is_first_login,
         )
 
     def test_homepage_url_for_anonymous_user(self):

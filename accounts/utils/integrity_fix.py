@@ -30,7 +30,7 @@ for w in res["warnings"]:
 """
 
 from django.db import transaction
-from typing import Iterable, Dict, Any, List
+from typing import Dict, Any
 
 from accounts.models import (
     Classroom,
@@ -38,22 +38,6 @@ from accounts.models import (
     Teacher,
     ClassroomAdministrator,
 )
-
-
-def _get_unique_org(objs: Iterable[Classroom]):
-    """
-    Classroom のクエリセットなどから、一意に organization を決定する。
-    - 組織が 1 種類ならその Organization を返す
-    - 0 または 2 種類以上なら None
-    """
-    org_ids = (
-        objs.values_list("organization_id", flat=True)
-        .distinct()
-    )
-    org_ids = [oid for oid in org_ids if oid is not None]
-    if len(org_ids) == 1:
-        return objs.first().organization
-    return None
 
 
 @transaction.atomic
@@ -69,28 +53,11 @@ def fix_org_classroom_integrity(dry_run: bool = True) -> Dict[str, Any]:
         "warnings": [],
     }
 
-    # --- ClassroomAdministrator の organization 補完 & 不正教室の切り離し ---
+    # --- ClassroomAdministrator の不正教室の切り離し ---
     for ca in ClassroomAdministrator.objects.all():
         classrooms = ca.classrooms.all()
 
-        # 1) org=None で classrooms があり、かつ組織が一意に決まる場合 → org を補完
-        if ca.organization is None and classrooms.exists():
-            org = _get_unique_org(classrooms)
-            if org:
-                msg = f"[CA] {ca} : organization=None -> {org}"
-                result["changes"].append(msg)
-                if not dry_run:
-                    ca.organization = org
-                    ca.full_clean()
-                    ca.save()
-            else:
-                msg = (
-                    f"[CA] {ca} : organization=None だが、"
-                    f"classrooms の organization が一意に決まらないためスキップ"
-                )
-                result["warnings"].append(msg)
-
-        # 2) org があるのに、別組織の教室をぶら下げている場合 → その教室だけ外す
+        # org があるのに、別組織の教室をぶら下げている場合 → その教室だけ外す
         if ca.organization:
             invalid_cls = classrooms.exclude(organization=ca.organization)
             if invalid_cls.exists():
@@ -102,43 +69,12 @@ def fix_org_classroom_integrity(dry_run: bool = True) -> Dict[str, Any]:
                 if not dry_run:
                     ca.classrooms.remove(*invalid_cls)
 
-    # --- Teacher の organization 補完 & 不正教室の切り離し ---
+    # --- Teacher の不正教室の切り離し ---
     for teacher in Teacher.objects.all():
         t_classrooms = teacher.classrooms.all()
         t_students = teacher.students.all()
 
-        # 1) org=None で、classrooms / students から一意に決まるなら補完
-        if teacher.organization is None:
-            org_from_classrooms = _get_unique_org(t_classrooms) if t_classrooms.exists() else None
-            org_from_students = None
-            if t_students.exists():
-                org_ids = (
-                    t_students.values_list("organization_id", flat=True)
-                    .distinct()
-                )
-                org_ids = [oid for oid in org_ids if oid is not None]
-                if len(org_ids) == 1:
-                    org_from_students = t_students.first().organization
-
-            candidate_orgs = {org for org in [org_from_classrooms, org_from_students] if org}
-
-            if len(candidate_orgs) == 1:
-                org = candidate_orgs.pop()
-                msg = f"[Teacher] {teacher} : organization=None -> {org}"
-                result["changes"].append(msg)
-                if not dry_run:
-                    teacher.organization = org
-                    teacher.full_clean()
-                    teacher.save()
-            elif len(candidate_orgs) > 1:
-                msg = (
-                    f"[Teacher] {teacher} : classrooms/students から複数の組織候補があり "
-                    f"organization を自動決定できないためスキップ"
-                )
-                result["warnings"].append(msg)
-            # candidate_orgs が空なら何もしない（本当に孤立している講師）
-
-        # 2) org があるのに、別組織の教室をぶら下げている場合 → その教室だけ外す
+        # org があるのに、別組織の教室をぶら下げている場合 → その教室だけ外す
         if teacher.organization:
             invalid_cls = t_classrooms.exclude(organization=teacher.organization)
             if invalid_cls.exists():
@@ -160,38 +96,12 @@ def fix_org_classroom_integrity(dry_run: bool = True) -> Dict[str, Any]:
                 )
                 result["warnings"].append(msg)
 
-        # Teacherの組織は設定されていないが、複数組織の教室に所属している
-        if teacher.organization is None and t_classrooms.exists():
-            org_ids = set(t_classrooms.values_list("organization_id", flat=True))
-            if len(org_ids) > 1:
-                result["warnings"].append(
-                    f"[Teacher] {teacher}: organization=None かつ複数組織の教室に所属"
-                )
-
 
     # --- Student の organization 補完 & 不正教室の切り離し ---
     for student in Student.objects.all():
         s_classrooms = student.classrooms.all()
 
-        # 1) org=None で classroom から一意に決まるなら補完
-        if student.organization is None and s_classrooms.exists():
-            org = _get_unique_org(s_classrooms)
-            if org:
-                msg = f"[Student] {student} : organization=None -> {org}"
-                result["changes"].append(msg)
-                if not dry_run:
-                    student.organization = org
-                    # student.full_clean()
-                    student.full_clean(exclude=["password"])
-                    student.save()
-            else:
-                msg = (
-                    f"[Student] {student} : organization=None だが、"
-                    f"classrooms の organization が一意に決まらないためスキップ"
-                )
-                result["warnings"].append(msg)
-
-        # 2) org があるのに、別組織の教室をぶら下げている場合 → その教室だけ外す
+        # organization があるのに、別組織の教室をぶら下げている場合 → その教室だけ外す
         if student.organization:
             invalid_cls = s_classrooms.exclude(organization=student.organization)
             if invalid_cls.exists():

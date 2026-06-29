@@ -43,6 +43,7 @@ class ClassroomAssignmentViewTest(TestCase):
             password="pass123456",
             role="classroom_administrator",
             organization=cls.org,
+            is_first_login=False,
         )
         cls.class_admin.classrooms.add(cls.classroom1)
 
@@ -52,6 +53,7 @@ class ClassroomAssignmentViewTest(TestCase):
             password="pass123456",
             role="teacher",
             organization=cls.org,
+            is_first_login=False,
         )
         cls.teacher.classrooms.add(cls.classroom1)
 
@@ -62,6 +64,7 @@ class ClassroomAssignmentViewTest(TestCase):
             role="student",
             line_user_id="student_user_line_id",
             organization=cls.org,
+            is_first_login=False,
         )
         cls.student_user.classrooms.add(cls.classroom1)
 

@@ -199,6 +199,7 @@ class AcceptInvitationsServiceTests(TestCase):
         self.assertEqual(user.role, "organization_administrator")
         self.assertTrue(user.check_password("test-password-123"))
         self.assertTrue(user.organizations.filter(id=self.organization.id).exists())
+        self.assertFalse(user.is_first_login)
 
     # ----------------------------
     # get_invitation_for_acceptance_lock
@@ -303,3 +304,61 @@ class AcceptInvitationsServiceTests(TestCase):
                 username="受理ユーザー",
                 password="test-password-123",
             )
+
+    def test_org_admin_created_with_is_first_login_false(self):
+        """
+        招待経由で作成された組織管理者は初回ログイン扱いにならない
+        """
+        invitation = self._create_invitation(role=InvitationRole.ORG_ADMIN)
+        token = self._build_token(invitation_id=invitation.id)
+
+        user = check_and_confirm_invitation(
+            token=token,
+            username="新規管理者",
+            password="test-password-123",
+        )
+
+        user.refresh_from_db()
+        self.assertFalse(user.is_first_login)
+
+    @patch("accounts.services.accept_invitations.get_invitation_for_acceptance_lock")
+    def test_check_and_confirm_invitation_raises_when_invitation_becomes_inactive_after_lock(
+        self,
+        mock_get_locked_invitation,
+    ):
+        """
+        初回確認後からロック取得までの間に招待が無効化された場合、
+        ユーザーを作成しない
+        """
+        invitation = self._create_invitation(
+            email="race-condition@example.com",
+            role=InvitationRole.ORG_ADMIN,
+        )
+        token = self._build_token(invitation_id=invitation.id)
+
+        invitation.used_at = timezone.now()
+        mock_get_locked_invitation.return_value = invitation
+
+        before_count = OrganizationAdministrator.objects.count()
+
+        with self.assertRaises(InactiveInvitationError):
+            check_and_confirm_invitation(
+                token=token,
+                username="競合ユーザー",
+                password="test-password-123",
+            )
+
+        self.assertEqual(
+            OrganizationAdministrator.objects.count(),
+            before_count,
+        )
+
+    @patch("accounts.services.accept_invitations.signing.loads")
+    def test_load_invitation_id_from_token_raises_when_signature_is_expired(
+        self,
+        mock_loads,
+    ):
+        mock_loads.side_effect = signing.SignatureExpired("expired")
+
+        with self.assertRaises(InvalidTokenError):
+            load_invitation_id_from_token(token="expired-token")

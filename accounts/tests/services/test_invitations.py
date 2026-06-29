@@ -183,23 +183,6 @@ class InviteOrganizationAdministratorTests(TestCase):
                 email_address="broken@example.com",
             )
 
-    def test_raises_when_teacher_has_no_org(self):
-        teacher = Teacher(
-            email="no-org@example.com",
-            username="no-org",
-            organization=None,
-        )
-        teacher.set_password("testpass")
-        teacher.save()
-
-        with self.assertRaises(MissingBelongedOrganizationError):
-            invite_organization_administrator(
-                accept_base_url=self.accept_base_url,
-                user=self.user,
-                organization_id=self.organization.id,
-                email_address="no-org@example.com",
-            )
-
     def test_raises_when_invalid_role(self):
         BaseUser.objects.create_user(
             email="invalid-role@example.com",

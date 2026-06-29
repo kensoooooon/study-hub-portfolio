@@ -6,7 +6,7 @@ from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 
 from vocab_trainer.models import Chapter, Textbook
-from accounts.models import Student
+from accounts.models import Student, Organization
 from accounts.forms import StudentEditForm, StudentEditForTeachersForm
 
 
@@ -120,13 +120,14 @@ class TextbookFormQuerysetTest(TestCase):
     教科書編集に関わるフォームのテスト
     """
     def setUp(self):
+        self.org = Organization.objects.create(name="Test Org")
         self.active_tb = Textbook.objects.create(name="Active", publisher="P", grade=1, is_active=True)
         self.inactive_tb = Textbook.objects.create(name="Inactive", publisher="P", grade=1, is_active=False)
         self.other_inactive_tb = Textbook.objects.create(
             name="Other Inactive", publisher="P", grade=1, is_active=False
         )
         self.student = Student.objects.create_user(
-            username="s1", password="pw", email="s1@test.com"
+            username="s1", password="pw", email="s1@test.com", organization=self.org
         )
         self.student.textbook = self.inactive_tb
         self.student.save()
@@ -153,7 +154,7 @@ class TextbookFormQuerysetTest(TestCase):
         教科書が設定されていない生徒にはアクティブな教科書のみ表示される
         """
         new_student = Student.objects.create_user(
-            username="s2", password="pw", email="s2@test.com"
+            username="s2", password="pw", email="s2@test.com", organization=self.org
         )
         form = StudentEditForm(instance=new_student)
         qs = form.fields["textbook"].queryset
@@ -169,6 +170,7 @@ class TextbookFormQuerysetTest(TestCase):
             username="s3",
             password="pw",
             email="s3@test.com",
+            organization=self.org,
         )
 
         form = StudentEditForTeachersForm(instance=new_student)

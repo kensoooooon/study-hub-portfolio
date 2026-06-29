@@ -11,9 +11,13 @@
     <hr>
     <form method="post">
         {% csrf_token %}
-        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+        {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
         <button type="submit" class="btn btn-danger">削除</button>
-        <a href="{% url 'organization_admin:classroom_detail' classroom_id %}" class="btn btn-secondary">キャンセル</a>
+        {% if classroom_id %}
+            <a href="{% url 'organization_admin:classroom_detail' classroom_id %}" class="btn btn-secondary">キャンセル</a>
+        {% else %}
+            <a href="{% url 'organization_admin:classroom_list' %}" class="btn btn-secondary">キャンセル</a>
+        {% endif %}
     </form>
 </div>
 {% endblock %}

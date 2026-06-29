@@ -62,6 +62,11 @@
         <div class="mb-3">
             {{ form.custom_message.label_tag }}
             {{ form.custom_message }}
+            {% if form.custom_message.help_text %}
+                <div class="form-text">
+                    {{ form.custom_message.help_text }}
+                </div>
+            {% endif %}
         </div>
         <div class="mb-3">
             {{ form.learning_link_destination.label_tag }}

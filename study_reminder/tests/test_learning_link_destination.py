@@ -275,6 +275,7 @@ class ReminderCreateViewLinkTest(TestCase):
         cls.teacher = Teacher.objects.create_user(
             username="teacher_create", email="teacher_create@example.com", password="pass",
             organization=cls.org,
+            is_first_login=False,
         )
         cls.teacher.classrooms.add(cls.classroom)
 
@@ -358,6 +359,7 @@ class ReminderEditViewLinkTest(TestCase):
         cls.teacher = Teacher.objects.create_user(
             username="teacher_edit", email="teacher_edit@example.com", password="pass",
             organization=cls.org,
+            is_first_login=False,
         )
         cls.teacher.classrooms.add(cls.classroom)
 
@@ -531,6 +533,7 @@ class ReminderCreateViewVocabTest(TestCase):
         cls.teacher = Teacher.objects.create_user(
             username="teacher_vocab", email="teacher_vocab@example.com", password="pass",
             organization=cls.org,
+            is_first_login=False,
         )
         cls.teacher.classrooms.add(cls.classroom)
 

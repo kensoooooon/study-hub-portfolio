@@ -24,9 +24,9 @@
         {% endif %}
         <li class="breadcrumb-item">
             {% if is_eiken %}
-                <a href="{% url 'listening_trainer:eiken_quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">英検用リスニングクイズ選択</a>
+                <a href="{% url 'listening_trainer:eiken_quiz_type_select_with_admin' %}?target_student_id={{ student.id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">英検用リスニングクイズ選択</a>
             {% else %}
-                <a href="{% url 'listening_trainer:quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">教科書用リスニングクイズ選択</a>
+                <a href="{% url 'listening_trainer:quiz_type_select_with_admin' %}?target_student_id={{ student.id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">教科書用リスニングクイズ選択</a>
             {% endif %}
         </li>
         <li class="breadcrumb-item active" aria-current="page">リスニングクイズ解答</li>
@@ -85,9 +85,9 @@
 
     <div class="d-flex justify-content-between mt-5">
         {% if is_eiken %}
-            <a href="{% url 'listening_trainer:eiken_quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">英検用リスニングクイズ選択</a>
+            <a href="{% url 'listening_trainer:eiken_quiz_type_select_with_admin' %}?target_student_id={{ student.id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">英検用リスニングクイズ選択</a>
         {% else %}
-            <a href="{% url 'listening_trainer:quiz_type_select_with_admin' %}?classroom_id={{ classroom_id }}&target_student_id={{ student.id }}">教科書用リスニングクイズ選択</a>
+            <a href="{% url 'listening_trainer:quiz_type_select_with_admin' %}?target_student_id={{ student.id }}{% if classroom_id %}&classroom_id={{ classroom_id }}{% endif %}">教科書用リスニングクイズ選択</a>
         {% endif %}
     </div>
 {% endblock %}

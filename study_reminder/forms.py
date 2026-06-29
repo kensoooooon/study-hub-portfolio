@@ -113,6 +113,10 @@ class StudyReminderEditForm(StudyReminderBaseForm):
         if self.instance:
             self.fields['day_of_week'].initial = self.instance.day_of_week
             self.fields['time_of_day'].initial = self.instance.time_of_day.strftime('%H:%M')
-            self.fields['custom_message'].initial = self.instance.custom_message or "ChatGPTの自動メッセージ"
+            self.fields['custom_message'].initial = self.instance.custom_message
 
         self._apply_availability_guard()
+
+    def clean_custom_message(self):
+        value = self.cleaned_data.get('custom_message')
+        return value or None

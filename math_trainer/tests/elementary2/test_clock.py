@@ -62,34 +62,37 @@ class CalculateBoundsTests(SimpleTestCase):
 
 
 class PickValidDeltaTests(SimpleTestCase):
+    """pick_valid_delta() が返す値の妥当性を検証する。
+
+    リファクタ後は choice/randint ではなく _build_delta_pool() ベースの方向列挙に
+    変わったため、モックを使わず実際の戻り値の範囲を確認する。
+    """
+
     def setUp(self):
         self.gen = ClockProblemGenerator(
             problem_types=["time_delta_with_24_hours_without_picture"],
             widths_of_time=["less_than_one_hour"],
         )
 
-    @patch("math_trainer.math_process.elementary2.clock_generator.choice", return_value="after")
-    @patch("math_trainer.math_process.elementary2.clock_generator.randint", return_value=30)
-    def test_less_than_one_hour_range(self, mocked_randint, mocked_choice):
-        # 10:00, less_than_one_hour なら 1..59 の範囲で返る
+    def test_less_than_one_hour_returns_delta_in_valid_range(self):
+        # 10:00 は before/after 両方とも十分な余裕があるため必ず成功する。
+        # less_than_one_hour なので delta は 1..59 の範囲に収まるはず。
         before_or_after, word, delta, maxm = self.gen.pick_valid_delta(
             TimeInformation(10, 0), "less_than_one_hour", use_24h_limit=True
         )
-        self.assertEqual(before_or_after, "after")
-        self.assertEqual(word, "後")
+        self.assertIn(before_or_after, ["before", "after"])
         self.assertTrue(1 <= delta <= 59)
-        self.assertTrue(maxm >= delta)
+        self.assertGreaterEqual(maxm, delta)
 
-    @patch("math_trainer.math_process.elementary2.clock_generator.choice", return_value="after")
-    @patch("math_trainer.math_process.elementary2.clock_generator.randint", return_value=120)
-    def test_gte_one_hour_range(self, mocked_randint, mocked_choice):
+    def test_gte_one_hour_returns_delta_at_least_60(self):
+        # 10:00 は before/after 両方とも十分な余裕があるため必ず成功する。
+        # greater_than_or_equal_to_one_hour なので delta >= 60 のはず。
         before_or_after, word, delta, maxm = self.gen.pick_valid_delta(
             TimeInformation(10, 0), "greater_than_or_equal_to_one_hour", use_24h_limit=True
         )
-        self.assertEqual(before_or_after, "after")
-        self.assertEqual(word, "後")
+        self.assertIn(before_or_after, ["before", "after"])
         self.assertGreaterEqual(delta, 60)
-        self.assertTrue(maxm >= delta)
+        self.assertGreaterEqual(maxm, delta)
 
 
 class GenerateDummyMinutesTests(SimpleTestCase):
@@ -146,6 +149,150 @@ class MakeProblemUnitTests(SimpleTestCase):
         # 1..12 時 / 1..59 分（現仕様）
         self.assertTrue(1 <= t.hour <= 12)
         self.assertTrue(1 <= t.minute <= 59)
+
+
+class BuildDeltaPoolTests(SimpleTestCase):
+    """_build_delta_pool() の境界値テスト。
+
+    width_of_time と max_minutes の組み合わせに対して正しい候補リストを返すことを確認する。
+    pick_valid_delta() と generate_minutes_for_dummy() が同じ pool を共有する前提となるため、
+    この helper の正確さが全体の一貫性を保証する。
+    """
+
+    def setUp(self):
+        self.gen = ClockProblemGenerator(
+            problem_types=["read_time"],
+            widths_of_time=["less_than_one_hour"],
+        )
+
+    def test_less_than_one_hour_returns_1_to_max(self):
+        # max_minutes=30 → [1, 2, ..., 30]
+        self.assertEqual(self.gen._build_delta_pool("less_than_one_hour", 30), list(range(1, 31)))
+
+    def test_less_than_one_hour_caps_at_59(self):
+        # max_minutes が 59 を超える場合は 59 でキャップされる
+        self.assertEqual(self.gen._build_delta_pool("less_than_one_hour", 120), list(range(1, 60)))
+
+    def test_less_than_one_hour_zero_max_returns_empty(self):
+        # max_minutes=0 は 1 分も動けない → 空リスト
+        self.assertEqual(self.gen._build_delta_pool("less_than_one_hour", 0), [])
+
+    def test_less_than_one_hour_negative_max_returns_empty(self):
+        # max_minutes が負の場合も空リストを返す
+        self.assertEqual(self.gen._build_delta_pool("less_than_one_hour", -1), [])
+
+    def test_gte_one_hour_returns_60_to_max(self):
+        # max_minutes=90 → [60, 61, ..., 90]
+        self.assertEqual(self.gen._build_delta_pool("greater_than_or_equal_to_one_hour", 90), list(range(60, 91)))
+
+    def test_gte_one_hour_exactly_60_returns_single_element(self):
+        # max_minutes=60 → [60] のみ（pool サイズ 1 なので pick_valid_delta では使われない）
+        self.assertEqual(self.gen._build_delta_pool("greater_than_or_equal_to_one_hour", 60), [60])
+
+    def test_gte_one_hour_below_60_returns_empty(self):
+        # max_minutes=59 は 60 分以上を取れない → 空リスト
+        self.assertEqual(self.gen._build_delta_pool("greater_than_or_equal_to_one_hour", 59), [])
+
+    def test_invalid_width_raises_value_error(self):
+        # 想定外の width_of_time は ValueError を送出する
+        with self.assertRaises(ValueError):
+            self.gen._build_delta_pool("invalid_width", 30)
+
+
+class PickValidDeltaDirectionFallbackTests(SimpleTestCase):
+    """pick_valid_delta() の方向フォールバック動作を検証する。
+
+    before 側の候補が不足していても after 側が有効なら成功することと、
+    両方向とも候補が不足する場合に RuntimeError が送出されることを確認する。
+    """
+
+    def setUp(self):
+        self.gen = ClockProblemGenerator(
+            problem_types=["time_delta_with_24_hours_without_picture"],
+            widths_of_time=["less_than_one_hour"],
+        )
+
+    def test_narrow_before_wide_after_selects_after(self):
+        # 0:03 (24時間制, use_24h_limit=True):
+        #   before: 0:03 → 0:01 = 2分 → pool=[1,2] (2件 < 4) → 無効
+        #   after:  0:03 → 23:59 = 23時間56分 = 1436分 → pool=[1..59] (59件) → 有効
+        # よって必ず after が選ばれる
+        before_or_after, word, delta, maxm = self.gen.pick_valid_delta(
+            TimeInformation(0, 3), "less_than_one_hour", use_24h_limit=True
+        )
+        self.assertEqual(before_or_after, "after")
+        self.assertEqual(word, "後")
+        self.assertTrue(1 <= delta <= 59)
+
+    def test_wide_before_narrow_after_selects_before(self):
+        """
+        後ろに広げられない条件であれば、前が選ばれる
+        """
+        before_or_after, word, delta, maxm = self.gen.pick_valid_delta(
+            TimeInformation(23, 58), "less_than_one_hour", use_24h_limit=True
+        )
+        self.assertEqual(before_or_after, "before")
+        self.assertEqual(word, "前")
+        self.assertTrue(1 <= delta <= 59)
+
+    def test_raises_runtime_error_when_no_valid_options(self):
+        # _build_delta_pool を常に空リストを返すようにモックすると、
+        # 両方向とも pool < 4 になり RuntimeError が送出される
+        with patch.object(self.gen, "_build_delta_pool", return_value=[]):
+            with self.assertRaises(RuntimeError) as ctx:
+                self.gen.pick_valid_delta(
+                    TimeInformation(10, 0), "less_than_one_hour", use_24h_limit=True
+                )
+        self.assertIn("Could not pick a valid delta_minutes", str(ctx.exception))
+
+
+class PickValidDeltaAndDummyConsistencyTests(SimpleTestCase):
+    """pick_valid_delta() → generate_minutes_for_dummy() の一貫性を検証する。
+
+    pick_valid_delta() が返した delta を使って generate_minutes_for_dummy() を呼ぶと、
+    必ずダミー3件が生成されること（Issue #21 の再現ケースを含む）を確認する。
+    """
+
+    def setUp(self):
+        self.gen = ClockProblemGenerator(
+            problem_types=["time_delta_without_am_pm_with_picture"],
+            widths_of_time=["less_than_one_hour"],
+        )
+
+    def _call_pair(self, time, width, use_24h):
+        """pick_valid_delta → generate_minutes_for_dummy を連続して呼び出す"""
+        before_or_after, word, delta, max_m = self.gen.pick_valid_delta(
+            time, width, use_24h_limit=use_24h
+        )
+        dummies = self.gen.generate_minutes_for_dummy(width, max_m, delta, before_or_after)
+        return dummies
+
+    def test_known_narrow_before_case_does_not_raise(self):
+        # Issue #21 の再現ケース相当:
+        # 0:03 (24時間制) は before 側が pool 2件のみで不足するが、
+        # pick_valid_delta() が after を選ぶため generate_minutes_for_dummy() は3件返す
+        dummies = self._call_pair(TimeInformation(0, 3), "less_than_one_hour", use_24h=True)
+        self.assertEqual(len(dummies), 3)
+        self.assertTrue(all(m > 0 for m in dummies))  # after なので正数
+
+    def test_gte_one_hour_narrow_before_case_does_not_raise(self):
+        # Issue #21 の再現ケース相当 (>=1h):
+        # 23:58 (use_24h_limit=True):
+        #   after: max=1分 → pool=[] → 無効
+        #   before: max=23*60+57=1437分 → pool=[60..1437] → 有効
+        dummies = self._call_pair(
+            TimeInformation(23, 58), "greater_than_or_equal_to_one_hour", use_24h=True
+        )
+        self.assertEqual(len(dummies), 3)
+
+    def test_generate_dummy_does_not_raise_could_not_prepare_error(self):
+        # 決定的条件: 10:30 は before/after 双方とも余裕があり必ず成功する。
+        # ダミー生成 RuntimeError が出ないことを明示的に確認する。
+        try:
+            dummies = self._call_pair(TimeInformation(10, 30), "less_than_one_hour", use_24h=True)
+        except RuntimeError as e:
+            self.fail(f"generate_minutes_for_dummy が RuntimeError を送出した: {e}")
+        self.assertEqual(len(dummies), 3)
 
 
 class GenerateAPITests(SimpleTestCase):

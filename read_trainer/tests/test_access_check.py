@@ -583,19 +583,6 @@ class StudentAccessCheckTest(TestCase):
         student = student_access_check(self.org1_admin, student_only_in_org.id)
         self.assertEqual(student.id, student_only_in_org.id)
     
-    def test_org_admin_can_access_student_not_in_org_but_in_classroom(self):
-        """
-        組織管理者は組織に所属していなくても、自身の組織に所属している教室に所属しいれば生徒にアクセス可能
-        """
-        student_only_in_classroom = Student.objects.create_user(
-            username="not org but classroom",
-            line_user_id="not_org_but_classroom_line_user_id",
-        )
-        student_only_in_classroom.classrooms.add(self.class1_1)
-        student = student_access_check(self.org1_admin, student_only_in_classroom.id)
-        self.assertEqual(student.id, student_only_in_classroom.id)
-    
-
     # claude
     def test_student_cannot_access_another_student_in_same_org(self):
         """

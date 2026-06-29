@@ -35,18 +35,24 @@ class ClassroomDetailViewTest(TestCase):
             username="class_admin",
             password="pass",
             role="classroom_administrator",
+            is_first_login=False,
+            organization=self.org1,
         )
         self.student_user = Student.objects.create_user(
             email="student@example.com",
             username="student",
             password="pass",
             role="student",
+            organization=self.org1,
+            is_first_login=False,
         )
         self.teacher_user = Teacher.objects.create_user(
             email="teacher@example.com",
             username="teacher",
             password="pass",
             role="teacher",
+            is_first_login=False,
+            organization=self.org1,
         )
 
         # --- 権限付与 ---

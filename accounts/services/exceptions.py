@@ -105,6 +105,38 @@ class AnotherRoleExistsInAnotherOrganizationError(InvitationError):
     user_message = "すでに別組織において、異なる役職として登録されています。"
 
 
+# ── LINE経由メールアドレス登録用例外 ──────────────────────────────────────
+
+class StudentEmailRegistrationError(Exception):
+    """LINE経由メール登録関連のベース例外"""
+    user_message = "メールアドレス登録に失敗しました。"
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or self.user_message)
+
+
+class StudentEmailRegistrationTokenInvalidError(StudentEmailRegistrationError):
+    """トークンが存在しない・署名不正"""
+    user_message = "無効な登録リンクです。"
+
+
+class StudentEmailRegistrationTokenInactiveError(StudentEmailRegistrationError):
+    """トークンが使用済み・revoke済み・期限切れ"""
+    user_message = "この登録リンクはすでに無効です。LINEから再度「メール登録」と送信してください。"
+
+
+class StudentEmailAlreadyRegisteredError(StudentEmailRegistrationError):
+    """対象 student にすでに email が登録済み"""
+    user_message = "すでにメールアドレスは登録済みです。"
+
+
+class StudentEmailConflictError(StudentEmailRegistrationError):
+    """入力 email が既存 BaseUser.email と衝突"""
+    user_message = "このメールアドレスは利用できません。別のメールアドレスを入力するか、教室までお問い合わせください。"
+
+
+# ── ユーザーデータ整合性異常 ─────────────────────────────────────────────
+
 class UserStateError(Exception):
     """ユーザーデータの整合性異常"""
     pass

@@ -35,6 +35,11 @@ from vocab_trainer.services.student_availability import has_vocab_progress
 logger = logging.getLogger(__name__)
 
 
+def _get_classroom_id(request):
+    classroom_id = request.GET.get('classroom_id') or request.POST.get('classroom_id')
+    return None if classroom_id == 'None' else classroom_id
+
+
 class ClassroomCreateView(LoginRequiredMixin, CreateView):
     model = Classroom
     form_class = ClassroomCreateForm
@@ -224,7 +229,7 @@ class StudentDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        classroom_id = self.request.GET.get('classroom_id') or self.request.POST.get('classroom_id')
+        classroom_id = _get_classroom_id(self.request)
         context['classroom_id'] = classroom_id
         context['reminders'] = self.object.study_reminders.ordered_by_day_and_time()
         context['has_vocab_history'] = has_vocab_progress(self.object)
@@ -237,7 +242,7 @@ class StudentEditView(LoginRequiredMixin, UpdateView):
     template_name = 'accounts/organization_admin/student/edit.html'
 
     def get_success_url(self):
-        classroom_id = self.request.POST.get('classroom_id') or ''
+        classroom_id = _get_classroom_id(self.request) or ''
         return reverse_lazy('organization_admin:student_detail', kwargs={'pk': self.object.pk}) + f'?classroom_id={classroom_id}'
 
     def get_queryset(self):
@@ -248,7 +253,7 @@ class StudentEditView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        classroom_id = self.request.GET.get('classroom_id') or self.request.POST.get('classroom_id')
+        classroom_id = _get_classroom_id(self.request)
         context['classroom_id'] = classroom_id
         student_id = self.object.id
         context['student_id'] = student_id
@@ -348,7 +353,7 @@ class StudentDeleteView(LoginRequiredMixin, DeleteView):
 
     def post(self, request, *args, **kwargs):  # post→form_valid→get_success_urlの後ろをカット
         self.object = self.get_object()
-        classroom_id = request.POST.get("classroom_id") or request.GET.get("classroom_id")
+        classroom_id = _get_classroom_id(request)
 
         self.object.is_active = False
         self.object.save(update_fields=["is_active"])
@@ -395,14 +400,14 @@ class TeacherEditView(LoginRequiredMixin, UpdateView):
 
 
     def get_success_url(self):
-        classroom_id = self.request.GET.get("classroom_id") or self.request.POST.get("classroom_id")
+        classroom_id = _get_classroom_id(self.request)
         if classroom_id:
             return reverse_lazy("organization_admin:classroom_detail", kwargs={"pk": classroom_id})
         return reverse_lazy("organization_admin:classroom_list")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        classroom_id = self.request.GET.get("classroom_id") or self.request.POST.get("classroom_id")
+        classroom_id = _get_classroom_id(self.request)
         context["classroom_id"] = classroom_id
         context['next_url'] = self.request.GET.get('next', '')
         context['teacher'] = self.object
@@ -492,11 +497,11 @@ class TeacherDeleteView(LoginRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["classroom_id"] = self.request.POST.get("classroom_id") or self.request.GET.get("classroom_id")
+        context["classroom_id"] = _get_classroom_id(self.request)
         return context
 
     def get_success_url(self):
-        classroom_id = self.request.POST.get("classroom_id") or self.request.GET.get("classroom_id")
+        classroom_id = _get_classroom_id(self.request)
         messages.success(self.request, "講師を削除しました。")
         if classroom_id:
             return reverse_lazy("organization_admin:classroom_detail", kwargs={"pk": classroom_id})
@@ -516,12 +521,10 @@ class AccountEditView(LoginRequiredMixin, UpdateView):
         return self.request.user
 
     def form_valid(self, form):
-        user = form.save()
-        user.is_first_login = False  # ⭐ 初回ログインフラグを解除
-        user.save()  # 必須（.save(commit=False) されている可能性あり
-        logout(self.request)  # ⭐ パスワード変更後にログアウト
+        form.save()
+        logout(self.request)
         messages.success(self.request, "パスワードを変更しました。再ログインしてください。")
-        return redirect(reverse('accounts_auth:login'))  # ログイン画面にリダイレクト
+        return redirect(reverse('accounts_auth:login'))
 
 
 class StudentEditForTeachersView(LoginRequiredMixin, UpdateView):
@@ -542,7 +545,7 @@ class StudentEditForTeachersView(LoginRequiredMixin, UpdateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
-        classroom_id = self.request.GET.get('classroom_id')
+        classroom_id = _get_classroom_id(self.request) or ''
         return reverse_lazy('organization_admin:student_detail', kwargs={'pk': self.object.pk}) + f'?classroom_id={classroom_id}'
 
     def get_context_data(self, **kwargs):

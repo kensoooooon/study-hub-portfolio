@@ -93,7 +93,7 @@
 <form id="problem-select-form" method="post" action="?" class="border-bottom border-end" novalidate>
     {% csrf_token %}
     <input type="hidden" name="student_id" value="{{ student_id }}">
-    <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+    {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
 
     {% if messages %}
         <div id="flash-messages" aria-live="polite" aria-atomic="true">

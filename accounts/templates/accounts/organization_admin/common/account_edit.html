@@ -5,6 +5,14 @@
 {% block content %}
 <div class="card shadow-sm p-4">
     <h1>アカウント情報編集</h1>
+
+    {% if request.user.is_first_login %}
+    <div class="alert alert-warning">
+        <strong>初回ログイン</strong>：セキュリティのためパスワードを変更してください。
+        変更後はいったんログアウトされます。新しいパスワードで再ログインしてください。
+    </div>
+    {% endif %}
+
     <form method="post" id="edit-form">
         {% csrf_token %}
 
@@ -15,17 +23,35 @@
             {% endfor %}
         </div>
         {% endif %}
-        
+
         <div class="mb-3">
             {{ form.email.label_tag }}
             {{ form.email }}
+            {% if form.email.errors %}
+            <div class="text-danger">{{ form.email.errors }}</div>
+            {% endif %}
         </div>
         <div class="mb-3">
             {{ form.password.label_tag }}
             {{ form.password }}
+            {% if form.password.help_text %}
+            <small class="text-muted">{{ form.password.help_text }}</small>
+            {% endif %}
+            {% if form.password.errors %}
+            <div class="text-danger">{{ form.password.errors }}</div>
+            {% endif %}
+        </div>
+        <div class="mb-3">
+            {{ form.password_confirm.label_tag }}
+            {{ form.password_confirm }}
+            {% if form.password_confirm.errors %}
+            <div class="text-danger">{{ form.password_confirm.errors }}</div>
+            {% endif %}
         </div>
         <button type="submit" class="btn btn-success">保存</button>
+        {% if not request.user.is_first_login %}
         <a href="{{ homepage_url }}" class="btn btn-secondary">キャンセル</a>
+        {% endif %}
     </form>
 </div>
 {% endblock %}

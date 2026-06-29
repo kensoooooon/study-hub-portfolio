@@ -2,7 +2,6 @@ from django.views import View
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.core import signing
-from django.conf import settings
 
 import requests
 
@@ -13,16 +12,23 @@ from accounts.models import Student
 
 # CSRF有効のまま（テンプレに {% csrf_token %} あり）
 class RegisterNameView(View):
-    def _get_student_or_403(self, line_user_id: str):
+    def _get_student_or_403(self, line_user_id: str, org_id: int):
         """取得可能な生徒を取得する
 
         Args:
             line_user_id (str): 対象生徒のLINEユーザーID
+            org_id (int): チャネルの組織ID（新規作成時に初回設定する）
 
         Returns:
             tuple(Optional[Student], Optional[HttpResponse]): 生徒とエラー発生時はエラーレスポンス
+        
+        Notes:
+            - get_or_create_userの仕様により、既に生徒の組織が決まっている時は上書きされない挙動
         """
-        student, _ = Student.objects.get_or_create(line_user_id=line_user_id)
+        student, _ = Student.objects.get_or_create_user(
+            line_user_id=line_user_id,
+            organization_id=org_id
+        )
 
         if not student.is_active:
             return None, HttpResponse("アカウントが無効化されています。", status=403)
@@ -35,10 +41,10 @@ class RegisterNameView(View):
             return None, None, "リンクが不正です（トークン欠如）"
         try:
             data = signing.loads(token, salt="register-name", max_age=3600)
-        except signing.BadSignature:
-            return None, None, "リンクが不正です（署名検証失敗）"
         except signing.SignatureExpired:
             return None, None, "リンクの有効期限が切れています"
+        except signing.BadSignature:
+            return None, None, "リンクが不正です（署名検証失敗）"
 
         if data.get("line_user_id") != line_user_id:
             return None, None, "リンクが不正です（ユーザー不一致）"
@@ -50,7 +56,11 @@ class RegisterNameView(View):
         # ★ dest からチャネル・組織を確定し、トークンのorg_idと一致を検証
         ch = LineChannel.objects.get(bot_user_id=dest, is_active=True)
         org = ch.organization
-        if org.id != org_id:
+        try:
+            org_id_int = int(org_id)
+        except (TypeError, ValueError):
+            raise ValueError("リンクが不正です（組織ID不正）")
+        if org.id != org_id_int:
             raise ValueError("リンクが不正です（組織不一致）")
         return ch, org
 
@@ -67,14 +77,10 @@ class RegisterNameView(View):
         except Exception as e:
             return HttpResponse(str(e), status=400)
 
-        student, error_response = self._get_student_or_403(line_user_id)
+        student, error_response = self._get_student_or_403(line_user_id, org_id=org.id)
         if error_response:
             return error_response
-        # ★ 組織整合性をここで確定
-        if student.organization_id is None:
-            student.organization_id = org.id
-            student.save(update_fields=["organization"])
-        elif student.organization_id != org.id:
+        if student.organization_id != org.id:
             return HttpResponse("現在、別の教室アカウントでご利用中です。", status=400)
 
         if (student.username or "").strip():
@@ -95,14 +101,10 @@ class RegisterNameView(View):
         except Exception as e:
             return HttpResponse(str(e), status=400)
 
-        student, error_response = self._get_student_or_403(line_user_id)
+        student, error_response = self._get_student_or_403(line_user_id, org_id=org.id)
         if error_response:
             return error_response
-        # ★ 組織整合性（POST側でも再チェック）
-        if student.organization_id is None:
-            student.organization_id = org.id
-            student.save(update_fields=["organization"])
-        elif student.organization_id != org.id:
+        if student.organization_id != org.id:
             return HttpResponse("現在、別の教室アカウントでご利用中です。", status=400)
 
         last_name = (request.POST.get("last_name") or "").strip()

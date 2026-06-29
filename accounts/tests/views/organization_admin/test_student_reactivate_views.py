@@ -22,7 +22,7 @@ class StudentReactivateViewTest(TestCase):
         cls.org1_admin = OrganizationAdministrator.objects.create_user(
             username="org1_admin",
             email="org1_admin@example.com",
-            password="pass123456"
+            password="pass123456",
         )
         cls.org1_admin.organizations.add(cls.org1)
 
@@ -31,7 +31,8 @@ class StudentReactivateViewTest(TestCase):
             username="class1_1_admin",
             email="class1_1_admin@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_admin.classrooms.add(cls.class1_1)
         cls.class1_1_teacher = Teacher.objects.create_user(
@@ -39,6 +40,7 @@ class StudentReactivateViewTest(TestCase):
             email="class1_1_teacher@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.class1_1_teacher.classrooms.add(cls.class1_1)
 
@@ -48,7 +50,8 @@ class StudentReactivateViewTest(TestCase):
             password="pass123456",
             organization=cls.org1,
             is_active=True,
-            line_user_id="line_id_class1_1_active_student"
+            line_user_id="line_id_class1_1_active_student",
+            is_first_login=False,
         )
         cls.class1_1_active_student.classrooms.add(cls.class1_1)
         cls.class1_1_active_student.teachers.add(cls.class1_1_teacher)
@@ -78,7 +81,8 @@ class StudentReactivateViewTest(TestCase):
         cls.class1_2_admin = ClassroomAdministrator.objects.create_user(
             username="class1_2_admin",
             email="class1_2_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
         cls.class1_2_admin.classrooms.add(cls.class1_2)
         cls.class1_2_active_student = Student.objects.create_user(

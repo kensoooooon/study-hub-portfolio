@@ -267,44 +267,70 @@ class ClockProblemGenerator(BaseProblemGenerator):
             raise ValueError(f"'before_or_after' must be 'before' or 'after'. {before_or_after} is wrong assignment.")
         return word, max_minutes
 
+    def _build_delta_pool(self, width_of_time: str, max_minutes: int) -> list[int]:
+        """width_of_time と max_minutes から有効な delta 候補リストを返す
+
+        Args:
+            width_of_time (str): 'less_than_one_hour' または 'greater_than_or_equal_to_one_hour'
+            max_minutes (int): calculate_bounds が返す上限分数
+
+        Raises:
+            ValueError: width_of_time が想定外の値の場合
+
+        Returns:
+            list[int]: 選択可能な delta 分数の全候補（空リストの場合もある）
+        """
+        if width_of_time == "less_than_one_hour":
+            upper = min(max_minutes, 59)
+            if upper < 1:
+                return []
+            return list(range(1, upper + 1))
+        elif width_of_time == "greater_than_or_equal_to_one_hour":
+            if max_minutes < 60:
+                return []
+            return list(range(60, max_minutes + 1))
+        else:
+            raise ValueError(f"width_of_time is invalid: {width_of_time}")
+
     def pick_valid_delta(self, time: TimeInformation, width_of_time: str, use_24h_limit: bool) -> tuple[str, str, int, int]:
-        """リトライを何度か繰り返し、時間幅と時間の表示性の条件に応じて問題の描写に必要な諸要素を渡す
+        """before/after 両方向を評価し、4択構成可能な方向からのみ正答 delta を選ぶ
+
+        before と after の両方向について候補プールを確認し、正答1件+ダミー3件の
+        4択を構成できる方向（pool >= 4）だけを valid_options として積む。
+        有効な方向が1つでもあればその中からランダムに選択し、pool から正答 delta を決定する。
 
         Args:
             time (TimeInformation): 基準となる時間
-            width_of_time (str): less_than_hour(1時間未満)とgreater_than_or_equal_to_one_hour(1時間以上のいずれか)
+            width_of_time (str): less_than_one_hour または greater_than_or_equal_to_one_hour
             use_24h_limit (bool): 24時間制を利用しているか否か
 
         Raises:
-            ValueError: 想定されていない時間幅の指定が入った場合に挙上
-            RuntimeError: 100回繰り返しても条件を満たす情報が生成出来なかった場合の挙上
+            ValueError: width_of_time が無効な値の場合（_build_delta_pool 経由）
+            RuntimeError: どちらの方向も 4件以上の候補を持たない場合
 
         Returns:
             tuple[str, str, int, int]:
                 before_or_after (str): 遡るか進むか
-                word (str): 上に応じた前or後
-                delta_minutes (int): ランダムに選択された差の分数
+                word (str): 上に応じた前 or 後
+                delta_minutes (int): pool からランダムに選択された差の分数
                 max_minutes (int): 問題の条件に応じうる最大の分数
         """
-        # 最大リトライ回数（不毛ループ防止）
-        for _ in range(100):
-            before_or_after = choice(["before", "after"])
-            word, max_minutes = self.calculate_bounds(time, before_or_after, use_24h_limit)
-            if width_of_time == "less_than_one_hour":
-                if max_minutes <= 0:
-                    continue  # 1分も動けない
-                upper = min(max_minutes, 59)
-                delta_minutes = randint(1, upper)
-                return before_or_after, word, delta_minutes, max_minutes
-            elif width_of_time == "greater_than_or_equal_to_one_hour":
-                if max_minutes < 60:
-                    continue  # 60分以上が取れないのでやり直し
-                delta_minutes = randint(60, max_minutes)
-                return before_or_after, word, delta_minutes, max_minutes
-            else:
-                raise ValueError(f"width_of_time is invalid: {width_of_time}")
-        # 到達しない場合は例外
-        raise RuntimeError("Could not pick a valid delta_minutes under constraints.")
+        valid_options = []
+        for direction in ["before", "after"]:
+            word, max_minutes = self.calculate_bounds(time, direction, use_24h_limit)
+            pool = self._build_delta_pool(width_of_time, max_minutes)
+            if len(pool) >= 4:  # 正答1 + ダミー3 = 4択の最小要件
+                valid_options.append((direction, word, pool, max_minutes))
+
+        if not valid_options:
+            raise RuntimeError(
+                f"Could not pick a valid delta_minutes under constraints. "
+                f"time={time}, width_of_time={width_of_time}"
+            )
+
+        before_or_after, word, pool, max_minutes = choice(valid_options)
+        delta_minutes = choice(pool)
+        return before_or_after, word, delta_minutes, max_minutes
 
     def make_time_information_for_answer(self, time: TimeInformation, delta_hours: int, delta_minutes: int) -> TimeInformation:
         """答えに利用するためのTimeInformationを、時間と分で生成
@@ -344,11 +370,15 @@ class ClockProblemGenerator(BaseProblemGenerator):
         Returns:
             minutes_for_dummy(list[int]): 条件を満たすダミー生成用の分数3つ
         """
-        if width_of_time == "less_than_one_hour":
-            lower_minutes, higher_minutes = 1, min(max_minutes, 59)
-        elif width_of_time == "greater_than_or_equal_to_one_hour":
-            lower_minutes, higher_minutes = 60, max_minutes
-        pool = [minute for minute in range(lower_minutes, higher_minutes + 1) if minute != delta_minutes_for_answer]
+        full_pool = self._build_delta_pool(width_of_time, max_minutes)
+        if not full_pool:
+            raise RuntimeError(
+                f"Could not prepare 3 dummy minutes under constraints: "
+                f"range=[], answer={delta_minutes_for_answer}"
+            )
+        lower_minutes = full_pool[0]
+        higher_minutes = full_pool[-1]
+        pool = [m for m in full_pool if m != delta_minutes_for_answer]
         candidates_of_minutes = set()
         if len(pool) >= 3:
             candidates_of_minutes.update(sample(pool, 3))

@@ -1,14 +1,17 @@
 from django.test import TestCase
 from .models import Conversation, MessageLog
-from accounts.models import Student
+from accounts.models import Student, Organization
 
 
 class ConversationModelTest(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name="Test Organization")
+
     def test_create_active_conversation(self):
         """
         新規アクティブ会話を作成するテスト
         """
-        student = Student.objects.create(username="testuser", email="testuser@example.com")
+        student = Student.objects.create(username="testuser", email="testuser@example.com", organization=self.org)
         conversation = Conversation.get_active_conversation(student)
         self.assertIsNotNone(conversation)
         self.assertEqual(conversation.student, student)
@@ -17,7 +20,7 @@ class ConversationModelTest(TestCase):
         """
         既存のアクティブな会話を取得するテスト
         """
-        student = Student.objects.create(username="testuser", email="testuser@example.com")
+        student = Student.objects.create(username="testuser", email="testuser@example.com", organization=self.org)
         # 既存の会話を作成
         Conversation.objects.create(student=student)
         active_conversation = Conversation.get_active_conversation(student)
@@ -28,7 +31,7 @@ class ConversationModelTest(TestCase):
         """
         非アクティブな会話後に新しい会話を作成するテスト
         """
-        student = Student.objects.create(username="testuser", email="testuser@example.com")
+        student = Student.objects.create(username="testuser", email="testuser@example.com", organization=self.org)
         # 非アクティブな会話を作成
         old_conversation = Conversation.objects.create(student=student, ended_at="2025-01-01T00:00:00Z")
         new_conversation = Conversation.get_active_conversation(student)
@@ -39,7 +42,7 @@ class ConversationModelTest(TestCase):
         """
         メッセージログが正しく作成されるかをテスト
         """
-        student = Student.objects.create(username="testuser", email="testuser@example.com")
+        student = Student.objects.create(username="testuser", email="testuser@example.com", organization=self.org)
         conversation = Conversation.get_active_conversation(student)
         message_log = MessageLog.objects.create(conversation=conversation, message="Hello", is_sent_by_user=True)
 

@@ -23,7 +23,7 @@
     <h1>講師{{ action }}</h1>
     <form method="post">
         {% csrf_token %}
-        <input type="hidden" name="classroom_id" value="{{ classroom_id }}">
+        {% if classroom_id %}<input type="hidden" name="classroom_id" value="{{ classroom_id }}">{% endif %}
         <div class="mb-3">
             {{ form.username.label_tag }}
             {{ form.username }}
@@ -61,7 +61,7 @@
                 <a href="{% url 'organization_admin:classroom_list' %}" class="btn btn-secondary">キャンセル</a>
             {% endif %}
             {% if object and object.id %}
-                <a href="{% url 'organization_admin:teacher_delete' object.id %}?classroom_id={{ classroom_id }}" class="btn btn-danger">
+                <a href="{% url 'organization_admin:teacher_delete' object.id %}{% if classroom_id %}?classroom_id={{ classroom_id }}{% endif %}" class="btn btn-danger">
                     講師を削除する
                 </a>
             {% endif %}

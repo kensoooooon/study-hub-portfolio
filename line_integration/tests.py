@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from urllib.parse import parse_qs, urlparse
@@ -94,3 +96,189 @@ class LearningLinksTests(TestCase):
     def test_get_login_redirect_path_invalid_destination_raises(self):
         with self.assertRaises(InvalidDestination):
             get_login_redirect_path("unknown")
+
+
+# ── LINE Webhook メール登録コマンド分岐テスト ────────────────────────────────
+
+
+class WebhookStudentOrganizationTests(TestCase):
+    """LineWebhookView.handle_event() における Student 作成時の organization 設定を検証する。"""
+
+    def setUp(self):
+        from accounts.models import Organization, Student
+        from line_integration.views import LineWebhookView
+
+        self.factory = RequestFactory()
+        self.view = LineWebhookView()
+        self.org = Organization.objects.create(name="Webhook org テスト組織")
+        self.ch = MagicMock()
+        self.ch.organization = self.org
+        self.ch.organization_id = self.org.pk
+        self.ch.bot_user_id = "BOT_org_001"
+
+    def _make_text_event(self, user_id: str) -> dict:
+        return {
+            "type": "message",
+            "source": {"type": "user", "userId": user_id},
+            "message": {"type": "text", "text": "こんにちは"},
+            "replyToken": "reply_token_org_xxx",
+        }
+
+    def _handle(self, event):
+        request = self.factory.get("/")
+        return self.view.handle_event(request, event, "access_token_xxx", self.ch)
+
+    def test_new_student_gets_organization_on_first_save(self):
+        """新規 Student は handle_event() 呼び出し時に organization_id が初回保存に含まれる。"""
+        from accounts.models import Student
+
+        event = self._make_text_event("U_new_student_org")
+        self._handle(event)
+
+        student = Student.objects.get(line_user_id="U_new_student_org")
+        self.assertEqual(student.organization_id, self.org.pk)
+
+    def test_existing_student_organization_is_not_overwritten_rejected(self):
+        """既存 Student の organization_id は get_or_create_userの仕様により上書きされず、登録済みとして拒否される"""
+        from accounts.models import Organization, Student
+
+        other_org = Organization.objects.create(name="別組織")
+        Student.objects.create(
+            username="既存生徒",
+            line_user_id="U_existing_org",
+            organization=other_org,
+        )
+
+        event = self._make_text_event("U_existing_org")
+        response = self._handle(event)
+
+        self.assertIn("別の教室アカウント", response)
+        student = Student.objects.get(line_user_id="U_existing_org")
+        self.assertEqual(student.organization_id, other_org.pk)
+
+    @patch("processors.chat_processor.ChatProcessor.generate_response_text", return_value="AIの返答")
+    def test_existing_same_organization_student_is_accepted(self, mock_chat):
+        """
+        すでに登録済みの同じ組織の生徒は、そのまま会話処理が行われる
+        """
+        from accounts.models import Student
+
+        Student.objects.create(
+            username="既存生徒",
+            line_user_id="U_existing_same_org",
+            organization=self.org,
+        )
+
+        event = self._make_text_event("U_existing_same_org")
+        response = self._handle(event)
+
+        self.assertEqual(response, "AIの返答")
+        mock_chat.assert_called_once()
+
+
+class WebhookEmailRegistrationBranchTests(TestCase):
+    """LineWebhookView.handle_event() のメール登録コマンド分岐を検証する。
+
+    外部 LINE API と ChatProcessor は mock して、分岐ロジックだけを確認する。
+    """
+
+    def setUp(self):
+        from accounts.models import Organization, Student
+        from line_integration.views import LineWebhookView
+
+        self.factory = RequestFactory()
+        self.view = LineWebhookView()
+
+        self.org = Organization.objects.create(name="Webhook テスト組織")
+
+        # 名前登録済み・active・email 未登録の標準生徒
+        self.student = Student.objects.create(
+            username="テスト生徒",
+            line_user_id="U_webhook_001",
+            organization=self.org,
+        )
+
+        # LineChannel の mock
+        self.ch = MagicMock()
+        self.ch.organization = self.org
+        self.ch.organization_id = self.org.pk
+        self.ch.bot_user_id = "BOT_001"
+
+    def _make_text_event(self, text: str, user_id: str = "U_webhook_001") -> dict:
+        return {
+            "type": "message",
+            "source": {"type": "user", "userId": user_id},
+            "message": {"type": "text", "text": text},
+            "replyToken": "reply_token_xxx",
+        }
+
+    def _handle(self, event):
+        request = self.factory.get("/")
+        return self.view.handle_event(request, event, "access_token_xxx", self.ch)
+
+    def test_name_registration_takes_priority_over_email_command(self):
+        """名前未登録の生徒には名前登録リンクが優先され、メール登録リンクは返らない。"""
+        self.student.username = ""
+        self.student.save(update_fields=["username"])
+
+        response = self._handle(self._make_text_event("メール登録"))
+
+        self.assertIn("お名前を登録してください", response)
+        self.assertNotIn("register_email", response)
+
+    @patch("processors.chat_processor.ChatProcessor.generate_response_text")
+    def test_email_registration_command_returns_registration_link(self, mock_chat):
+        """active・名前登録済み・email 未登録の生徒が「メール登録」を送ると登録リンクが返る。"""
+        response = self._handle(self._make_text_event("メール登録"))
+
+        self.assertIn("register_email", response)
+        self.assertIn("?t=", response)
+        mock_chat.assert_not_called()
+
+    @patch("processors.chat_processor.ChatProcessor.generate_response_text")
+    def test_email_already_registered_returns_registered_message(self, mock_chat):
+        """email 登録済みの生徒が「メール登録」を送ると登録済みメッセージが返る。"""
+        self.student.email = "existing@example.com"
+        self.student.save(update_fields=["email"])
+
+        response = self._handle(self._make_text_event("メール登録"))
+
+        self.assertIn("登録済み", response)
+        mock_chat.assert_not_called()
+
+    @patch("processors.chat_processor.ChatProcessor.generate_response_text", return_value="AIの返答")
+    def test_ordinary_message_passes_to_chat_processor(self, mock_chat):
+        """通常テキストはメール登録コマンドと判定されず ChatProcessor に渡る。"""
+        response = self._handle(self._make_text_event("数学を教えてください"))
+
+        mock_chat.assert_called_once()
+        self.assertEqual(response, "AIの返答")
+    
+    @patch("processors.chat_processor.ChatProcessor.generate_response_text")
+    def test_inactive_student_is_rejected_before_email_registration_branch(self, mock_chat):
+        """inactive 生徒はメール登録コマンドでも通常チャットへ流れず、無効化メッセージが返る。"""
+        self.student.is_active = False
+        self.student.save(update_fields=["is_active"])
+
+        response = self._handle(self._make_text_event("メール登録"))
+
+        self.assertIn("アカウントが無効化されています", response)
+        self.assertIn("教室までご連絡ください", response)
+        self.assertNotIn("register_email", response)
+        mock_chat.assert_not_called()
+
+    @patch("processors.chat_processor.ChatProcessor.generate_response_text")
+    def test_different_organization_student_is_rejected_before_email_registration_branch(self, mock_chat):
+        """別組織チャンネルからのメール登録コマンドは、メール登録処理に入らず拒否される。"""
+        from accounts.models import Organization
+
+        other_org = Organization.objects.create(name="別組織")
+        self.student.organization = other_org
+        self.student.save(update_fields=["organization"])
+
+        response = self._handle(self._make_text_event("メール登録"))
+
+        self.assertIn("別の教室アカウント", response)
+        self.assertIn("教室までお問い合わせください", response)
+        self.assertNotIn("register_email", response)
+        mock_chat.assert_not_called()

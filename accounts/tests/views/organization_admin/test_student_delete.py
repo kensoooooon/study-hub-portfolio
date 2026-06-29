@@ -26,7 +26,7 @@ class StudentSoftDeleteTest(TestCase):
         cls.org_admin1 = OrganizationAdministrator.objects.create_user(
             username="Org Admin1",
             email="org_admin1@example.com",
-            password="pass123456"
+            password="pass123456",
         )
         cls.org_admin1.organizations.add(cls.org1)
 
@@ -37,7 +37,8 @@ class StudentSoftDeleteTest(TestCase):
             username="Classroom Admin1",
             email="classroom_admin1@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.classroom_admin1.classrooms.add(cls.classroom1)
 
@@ -47,7 +48,8 @@ class StudentSoftDeleteTest(TestCase):
             username="Classroom Admin1_2",
             email="classroom_admin1_2@example.com",
             password="pass123456",
-            organization=cls.org1
+            organization=cls.org1,
+            is_first_login=False,
         )
         cls.classroom_admin1_2.classrooms.add(cls.classroom1_2)
 
@@ -57,6 +59,7 @@ class StudentSoftDeleteTest(TestCase):
             email="teacher1@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.teacher1.classrooms.add(cls.classroom1)
 
@@ -66,6 +69,7 @@ class StudentSoftDeleteTest(TestCase):
             email="teacher1_2@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.teacher1_2.classrooms.add(cls.classroom1)
 
@@ -75,6 +79,7 @@ class StudentSoftDeleteTest(TestCase):
             email="student1@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.student1.classrooms.add(cls.classroom1)
         cls.student1.teachers.add(cls.teacher1)
@@ -85,6 +90,7 @@ class StudentSoftDeleteTest(TestCase):
             email="student_actor1@example.com",
             password="pass123456",
             organization=cls.org1,
+            is_first_login=False,
         )
         cls.student_actor1.classrooms.add(cls.classroom1)
 
@@ -93,7 +99,7 @@ class StudentSoftDeleteTest(TestCase):
         cls.org_admin2 = OrganizationAdministrator.objects.create_user(
             username="Org Admin2",
             email="org_admin2@example.com",
-            password="pass123456"
+            password="pass123456",
         )
         cls.org_admin2.organizations.add(cls.org2)
 
@@ -103,7 +109,8 @@ class StudentSoftDeleteTest(TestCase):
             username="Classroom Admin2",
             email="classroom_admin2@example.com",
             password="pass123456",
-            organization=cls.org2
+            organization=cls.org2,
+            is_first_login=False,
         )
         cls.classroom_admin2.classrooms.add(cls.classroom2)
 
@@ -112,6 +119,7 @@ class StudentSoftDeleteTest(TestCase):
             email="teacher2@example.com",
             password="pass123456",
             organization=cls.org2,
+            is_first_login=False,
         )
         cls.teacher2.classrooms.add(cls.classroom2)
 
@@ -120,6 +128,7 @@ class StudentSoftDeleteTest(TestCase):
             email="student_actor2@example.com",
             password="pass123456",
             organization=cls.org2,
+            is_first_login=False,
         )
         cls.student_actor2.classrooms.add(cls.classroom2)
     
