@@ -78,6 +78,16 @@ The moat isn't the AI. It's the institutional data and local specificity around 
 
 ---
 
+### CI via GitHub Actions
+
+**Problem:** Even in solo development, manual test runs become unreliable as the codebase grows — it's easy to merge a regression without noticing.
+
+**Decision:** Added a GitHub Actions workflow that runs the full Django test suite on every PR into `develop` and `master`, against a Postgres 14 service container.
+
+**Tradeoff:** Deliberately skipped lint (ruff/mypy) and coverage thresholds until their need is demonstrated — avoiding upfront over-engineering. Also, branch-protection enforcement (required status checks blocking merge on failure) currently doesn't take effect on this repo's plan tier (below GitHub Team), so the pipeline runs and reports status but can't yet block a merge. This gap is documented as an ADR and tracked pending a plan upgrade decision.
+
+---
+
 ## Technical Highlights
 
 **Multi-tenant RBAC:** Four-layer hierarchy (Organization Admin → Classroom Admin → Teacher → Student). Role-based data filtering enforced at the QuerySet level across all models — not in view logic — so access boundaries are consistent regardless of entry point.
@@ -105,6 +115,8 @@ I use Issue-driven development with AI-assisted engineering on every cycle:
 **Division of labor:** ChatGPT for open-ended discussion and skeptical review; Claude for technical research and implementation. I own the *why* and *how* — the *what* is delegated.
 
 I'm also consciously shifting toward proposing the framework myself before handing off to AI, rather than asking AI to propose it. The goal is to maintain judgment ownership while using AI to accelerate execution.
+
+I record significant technical decisions as ADRs (Architecture Decision Records) under `docs/decisions/`, so the reasoning stays traceable later ([sample: CI introduction ADR](docs/decisions/0070-introduce-ci-test-gate.md)).
 
 ---
 
@@ -149,6 +161,7 @@ Early on, I added features based on what I thought was needed. The result: I now
 | AI | OpenAI API | Content generation + conversation |
 | Messaging | LINE Messaging API | Near-universal Japan penetration |
 | Algorithm | SuperMemo-2 | Science-backed study scheduling |
+| CI/CD | GitHub Actions | Automated test runs per PR, regression prevention |
 
 ---
 
