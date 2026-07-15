@@ -86,6 +86,8 @@ The moat isn't the AI. It's the institutional data and local specificity around 
 
 **Tradeoff:** Deliberately skipped lint (ruff/mypy) and coverage thresholds until their need is demonstrated — avoiding upfront over-engineering. Also, branch-protection enforcement (required status checks blocking merge on failure) currently doesn't take effect on this repo's plan tier (below GitHub Team), so the pipeline runs and reports status but can't yet block a merge. This gap is documented as an ADR and tracked pending a plan upgrade decision.
 
+(This repository is a sanitized portfolio copy, and the GitHub Secrets required to actually run CI aren't registered here — so Actions won't execute in this repo. The workflow file is included as a real implementation example. The equivalent CI runs continuously on the private repository this was sanitized from.)
+
 ---
 
 ## Technical Highlights
@@ -116,7 +118,7 @@ I use Issue-driven development with AI-assisted engineering on every cycle:
 
 I'm also consciously shifting toward proposing the framework myself before handing off to AI, rather than asking AI to propose it. The goal is to maintain judgment ownership while using AI to accelerate execution.
 
-I record significant technical decisions as ADRs (Architecture Decision Records) under `docs/decisions/`, so the reasoning stays traceable later ([sample: CI introduction ADR](docs/decisions/0070-introduce-ci-test-gate.md)).
+I record significant technical decisions as ADRs (Architecture Decision Records) under `docs/decisions/`, so the reasoning stays traceable later (examples: [CI introduction](docs/decisions/0070-introduce-ci-test-gate.md), [organization-required-field decision](docs/decisions/0035-teacher-classroom-admin-organization-required-together.md), [LaTeX escape-sequence handling](docs/decisions/0049-latex-escape-sequence-adjustment.md)).
 
 ---
 
