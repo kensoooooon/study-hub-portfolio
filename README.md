@@ -141,6 +141,15 @@ Issue 駆動開発を採用しています。1 つの Issue が 1 つの変更�
 
 重要な技術判断は ADR（Architecture Decision Record）として `docs/decisions/` に記録し、後から経緯を追えるようにしています（例：[CI導入](docs/decisions/0070-introduce-ci-test-gate.md)、[組織必須化の判断](docs/decisions/0035-teacher-classroom-admin-organization-required-together.md)、[LaTeXエスケープ対応](docs/decisions/0049-latex-escape-sequence-adjustment.md)）。
 
+### AI 協業のドキュメント基盤
+
+上記のフローは口頭で説明しているだけではなく、実際に運用しているドキュメント体系として仕組み化しています。[`docs/ai_workflow/`](docs/ai_workflow/) 配下に、その体系を抜粋・一般化したものを置いています。
+
+- [`CLAUDE.md`](docs/ai_workflow/CLAUDE.md) — AI アシスタント向けの作業ルールブック本体。テナント境界の扱い方、作業の納品フロー（人間が commit / push する）、テストへのドキュメント付与義務などを定義
+- [`README_AI.md`](docs/ai_workflow/README_AI.md) — AI が「どのドキュメントを、いつ、どの順番で読むか」を規定するメタドキュメント。状態変更・リスク・人間判断事項を先に開示する Risk-First Planning Rule を含む
+- [`ai_memory/`](docs/ai_workflow/ai_memory/) — 「予測と実際のズレ」を記録する AI Memory の運用方針。記録のトリガーは人間が握り、AI が自動生成しない設計
+- [`work_items/example-migration/`](docs/ai_workflow/work_items/example-migration/) — 破壊的な DB スキーマ変更を 4 フェーズ（Characterize → Expand → Switch → Contract）に分けて安全に進めるための運用例
+
 ---
 
 ## 運用経験と改善

@@ -120,6 +120,15 @@ I'm also consciously shifting toward proposing the framework myself before handi
 
 I record significant technical decisions as ADRs (Architecture Decision Records) under `docs/decisions/`, so the reasoning stays traceable later (examples: [CI introduction](docs/decisions/0070-introduce-ci-test-gate.md), [organization-required-field decision](docs/decisions/0035-teacher-classroom-admin-organization-required-together.md), [LaTeX escape-sequence handling](docs/decisions/0049-latex-escape-sequence-adjustment.md)).
 
+### The documentation infrastructure behind AI collaboration
+
+The workflow above isn't just a description — it's backed by a document system I actually operate day to day. [`docs/ai_workflow/`](docs/ai_workflow/) contains a curated, generalized excerpt of that system:
+
+- [`CLAUDE.md`](docs/ai_workflow/CLAUDE.md) — the rulebook the AI assistant works from: how to respect tenant boundaries, a delivery workflow where the human always performs the final commit/push, and a requirement that every test carries a docstring explaining what it protects
+- [`README_AI.md`](docs/ai_workflow/README_AI.md) — a meta-document defining which docs the AI should read, when, and in what order, including a Risk-First Planning Rule that forces state changes, operational risk, and decisions reserved for me to be surfaced before any implementation detail
+- [`ai_memory/`](docs/ai_workflow/ai_memory/) — the operating policy for an AI Memory system that records where AI (or my own) predictions diverged from reality. The human decides what's worth recording — the AI never generates entries on its own
+- [`work_items/example-migration/`](docs/ai_workflow/work_items/example-migration/) — an example of how a breaking schema change gets staged across four phases (Characterize → Expand → Switch → Contract) so there's always a safe point to roll back to
+
 ---
 
 ## Operational Experience
