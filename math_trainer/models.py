@@ -130,7 +130,7 @@ class ProblemSessionQuerySet(models.QuerySet):
             # return qs.filter(student__classrooms__in=role_obj.classrooms.all()).distinct()
             return qs.filter(student__classrooms__in=role_obj.classrooms).distinct()
         if role == "organization_administrator" and role_obj:
-            return qs.filter(student__organization__in=role_obj.organizations.all()).distinct()
+            return qs.filter(student__organization_id=role_obj.organization_id).distinct()
 
 
         return qs.none()

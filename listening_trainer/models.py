@@ -38,9 +38,10 @@ class ListeningPassageQuerySet(models.QuerySet):
             return qs.filter(created_by_id=user.id)
 
         if role == "teacher":
-            qs = qs.filter(created_by__teachers=role_obj)
-            if role_obj.organization_id:
-                qs = qs.filter(created_by__organization=role_obj.organization)
+            qs = qs.filter(
+                created_by__teachers=role_obj,
+                created_by__organization=role_obj.organization,
+            )
             return qs.distinct()
 
         if role == "classroom_administrator":
@@ -50,7 +51,7 @@ class ListeningPassageQuerySet(models.QuerySet):
 
         if role == "organization_administrator":
             return qs.filter(
-                created_by__organization__in=role_obj.get_accessible_organizations()
+                created_by__organization_id=role_obj.organization_id
             ).distinct()
 
         return qs.none()
@@ -115,9 +116,10 @@ class ListeningQuestionQuerySet(models.QuerySet):
             return qs.filter(passage__created_by_id=user.id)
 
         if role == "teacher":
-            qs = qs.filter(passage__created_by__teachers=role_obj)
-            if role_obj.organization_id:
-                qs = qs.filter(passage__created_by__organization=role_obj.organization)
+            qs = qs.filter(
+                passage__created_by__teachers=role_obj,
+                passage__created_by__organization=role_obj.organization,
+            )
             return qs.distinct()
 
         if role == "classroom_administrator":
@@ -127,7 +129,7 @@ class ListeningQuestionQuerySet(models.QuerySet):
 
         if role == "organization_administrator":
             return qs.filter(
-                passage__created_by__organization__in=role_obj.get_accessible_organizations()
+                passage__created_by__organization_id=role_obj.organization_id
             ).distinct()
 
         return qs.none()
@@ -186,9 +188,10 @@ class ListeningAnswerQuerySet(models.QuerySet):
             return qs.filter(student_id=user.id)
 
         if role == "teacher":
-            qs = qs.filter(student__teachers=role_obj)
-            if role_obj.organization_id:
-                qs = qs.filter(student__organization=role_obj.organization)
+            qs = qs.filter(
+                student__teachers=role_obj,
+                student__organization=role_obj.organization,
+            )
             return qs.distinct()
 
         if role == "classroom_administrator":
@@ -198,7 +201,7 @@ class ListeningAnswerQuerySet(models.QuerySet):
 
         if role == "organization_administrator":
             return qs.filter(
-                student__organization__in=role_obj.get_accessible_organizations()
+                student__organization_id=role_obj.organization_id
             ).distinct()
 
         return qs.none()
@@ -253,9 +256,10 @@ class StudentListeningPassageProgressQuerySet(models.QuerySet):
             return qs.filter(student_id=user.id)
 
         if role == "teacher":
-            qs = qs.filter(student__teachers=role_obj)
-            if role_obj.organization_id:
-                qs = qs.filter(student__organization=role_obj.organization)
+            qs = qs.filter(
+                student__teachers=role_obj,
+                student__organization=role_obj.organization,
+            )
             return qs.distinct()
 
         if role == "classroom_administrator":
@@ -265,7 +269,7 @@ class StudentListeningPassageProgressQuerySet(models.QuerySet):
 
         if role == "organization_administrator":
             return qs.filter(
-                student__organization__in=role_obj.get_accessible_organizations()
+                student__organization_id=role_obj.organization_id
             ).distinct()
 
         return qs.none()

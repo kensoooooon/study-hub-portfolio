@@ -306,14 +306,9 @@ class StudentListView(LoginRequiredMixin, ListView):
         base_qs = Student.objects.active()
         # ◆ 組織管理者
         if role == 'organization_administrator':
-            # OrganizationAdministrator.organizations (M2M)
-            orgs = role_obj.organizations.all()
-            if not orgs.exists():
-                return Student.objects.none()
-
             return (
                 base_qs
-                .filter(organization__in=orgs)
+                .filter(organization_id=role_obj.organization_id)
                 .prefetch_related(
                     Prefetch('study_reminders', queryset=reminder_qs)
                 )
@@ -324,10 +319,10 @@ class StudentListView(LoginRequiredMixin, ListView):
         elif role == 'classroom_administrator':
             # ClassroomAdministrator.classrooms / organization
             classrooms = role_obj.classrooms.all()
-            qs = base_qs.filter(classrooms__in=classrooms).distinct()
-
-            if role_obj.organization:
-                qs = qs.filter(organization=role_obj.organization)
+            qs = base_qs.filter(
+                classrooms__in=classrooms,
+                organization=role_obj.organization,
+            ).distinct()
 
             return qs.prefetch_related(
                 Prefetch('study_reminders', queryset=reminder_qs)
@@ -336,10 +331,10 @@ class StudentListView(LoginRequiredMixin, ListView):
         # ◆ 講師
         elif role == 'teacher':
             # Student.teachers は Teacher モデル向けなので teachers=role_obj の方が素直
-            qs = base_qs.filter(teachers=role_obj).distinct()
-
-            if getattr(role_obj, "organization", None):
-                qs = qs.filter(organization=role_obj.organization)
+            qs = base_qs.filter(
+                teachers=role_obj,
+                organization=role_obj.organization,
+            ).distinct()
 
             return qs.prefetch_related(
                 Prefetch('study_reminders', queryset=reminder_qs)

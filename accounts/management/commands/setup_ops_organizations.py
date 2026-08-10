@@ -19,15 +19,12 @@ class Command(BaseCommand):
                 "add_organization",
                 "change_organization",
                 # 独自
-                "assign_organization_administrator",
                 "view_all_organizations",
                 "invite_organization_administrator",
             ],
             OrganizationAdministrator: [  # 組織管理者に対して行える行動
                 # Django標準
                 "view_organizationadministrator",
-                # 独自
-                "view_all_organization_administrators",
             ],
         }
 

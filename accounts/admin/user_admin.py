@@ -65,13 +65,13 @@ class OrganizationAdministratorAdmin(admin.ModelAdmin):
     """
     OrganizationAdministrator 管理画面
     """
-    list_display = ('username', 'email', 'is_active', 'date_joined')
+    list_display = ('username', 'email', 'organization', 'is_active', 'date_joined')
     search_fields = ('username', 'email')
     list_filter = ('is_active', 'date_joined')
     readonly_fields = ('date_joined',)
     fieldsets = (
         (None, {
-            'fields': ('username', 'email', 'is_active', 'date_joined'),
+            'fields': ('username', 'email', 'organization', 'is_active', 'date_joined'),
         }),
     )
-    
+

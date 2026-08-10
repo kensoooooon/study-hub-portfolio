@@ -17,7 +17,7 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth import logout
 from django.shortcuts import redirect
-from django.http import HttpResponseNotAllowed, Http404
+from django.http import HttpResponseNotAllowed
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import render
 from django.views import View
@@ -26,7 +26,6 @@ from django.shortcuts import get_object_or_404
 from accounts.models import Classroom
 from accounts.models import Student, Teacher, BaseUser
 from accounts.forms import StudentEditForm, TeacherEditForm, TeacherCreateForm, AccountEditForm, StudentEditForTeachersForm
-from vocab_trainer.models import StudentContextProgress
 from accounts.forms import ClassroomCreateForm, ClassroomEditForm, AssignClassroomForm
 from accounts.selectors import visible_students_qs, visible_inactive_students_qs
 from vocab_trainer.services.student_availability import has_vocab_progress
@@ -52,7 +51,7 @@ class ClassroomCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         admin = self.request.user.get_role_object()
-        organization = admin.organizations.first()
+        organization = admin.organization
         if not organization:
             raise PermissionDenied("組織が見つかりません。")
 
@@ -272,7 +271,7 @@ class StudentEditView(LoginRequiredMixin, UpdateView):
         student_teachers = list(student.teachers.all())
 
         for teacher in student_teachers:
-            if teacher.organization_id and teacher.organization_id != student.organization_id:
+            if teacher.organization_id != student.organization_id:
                 logger.error(
                     "教師と生徒の所属組織に不整合が生じています。",
                     extra={
@@ -448,8 +447,12 @@ class TeacherCreateView(LoginRequiredMixin, CreateView):
     success_url = reverse_lazy('organization_admin:classroom_detail')
 
     def dispatch(self, request, *args, **kwargs):
+        # 未ログインの場合はroleを参照する前にログイン画面へ
+        if not request.user.is_authenticated:
+            return redirect("accounts_auth:login")
+
         # アクセス権限を確認
-        if not request.user.role in ['organization_administrator', 'classroom_administrator']:
+        if request.user.role not in ['organization_administrator', 'classroom_administrator']:
             raise PermissionDenied("アクセス権限がありません")
         return super().dispatch(request, *args, **kwargs)
 
@@ -480,9 +483,9 @@ class TeacherCreateView(LoginRequiredMixin, CreateView):
         return reverse_lazy('organization_admin:classroom_list')  # デフォルトのリダイレクト先
 
     def form_valid(self, form):
-        teacher = form.save()
-        messages.success(self.request, f"講師 {teacher.username} を作成しました")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        messages.success(self.request, f"講師 {self.object.username} を作成しました")
+        return response
 
 
 class TeacherDeleteView(LoginRequiredMixin, DeleteView):

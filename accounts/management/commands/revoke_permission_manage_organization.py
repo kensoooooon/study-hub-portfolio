@@ -3,7 +3,7 @@ from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
 
 
-GROUP_NAME = "ops_organizations"  # view, add, change, assign_organization_administratorを持つ
+GROUP_NAME = "ops_organizations"  # view, add, changeを持つ
 
 
 class Command(BaseCommand):

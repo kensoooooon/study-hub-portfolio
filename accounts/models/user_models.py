@@ -337,7 +337,7 @@ class Teacher(BaseUser):
             admin = getattr(user, 'organizationadministrator', None)
             if admin:
                 # 講師が組織管理者が管理する教室に所属しているかを判定
-                return self.classrooms.filter(organization__in=admin.organizations.all()).exists()
+                return self.classrooms.filter(organization_id=admin.organization_id).exists()
         elif user.role == 'classroom_administrator':
             admin = getattr(user, 'classroomadministrator', None)
             if admin:
@@ -426,14 +426,10 @@ class OrganizationAdministrator(BaseUser):
     """
     組織管理者モデル
     """
-    organizations = models.ManyToManyField(
-        Organization, related_name='administrators', blank=True, verbose_name="管理組織"
+    organization = models.ForeignKey(
+        Organization, on_delete=models.PROTECT, null=False, blank=False,
+        related_name='administrators', verbose_name="所属組織",
     )
-
-    class Meta:
-        permissions = [  # 独自権限の設定
-            ("view_all_organization_administrators", "Can view all organization administrators"),
-        ]
 
     def save(self, *args, **kwargs):
         if not self.role:
@@ -444,19 +440,13 @@ class OrganizationAdministrator(BaseUser):
         """
         自身の管理する組織に属する教室を管理できるかを判定
         """
-        return self.organizations.filter(id=classroom.organization_id).exists()
+        return self.organization_id == classroom.organization_id
 
     def get_accessible_classrooms(self):
         """
         管理可能なすべての教室を取得する（最適化されたクエリ）
         """
-        return Classroom.objects.filter(organization__in=self.organizations.all()).select_related('organization')
-
-    def get_accessible_organizations(self):
-        """
-        管理可能なすべての組織を取得する
-        """
-        return self.organizations.all()
+        return Classroom.objects.filter(organization_id=self.organization_id).select_related('organization')
 
     def can_manage_student(self, student: Student) -> bool:
         """
@@ -464,9 +454,4 @@ class OrganizationAdministrator(BaseUser):
         """
         if not student.is_active:
             return False
-        # 組織が確定している生徒は organization で判定（推奨）
-        if student.organization_id:
-            return self.organizations.filter(id=student.organization_id).exists()
-
-        # ォールバック：教室経由（既存ロジック）
-        return self.get_accessible_classrooms().filter(students=student).exists()
+        return self.organization_id == student.organization_id

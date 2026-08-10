@@ -49,14 +49,29 @@ class StudyReminderQuerySet(models.QuerySet):
         return self.filter(student__is_active=True)
 
     def notifiable_in_slot(self, *, day_of_week, start_time, end_time, target_date):
-        """
-        リマインダー自体も紐づいている生徒もアクティブなもののうち、
-        指定曜日・指定時刻スロットに該当し、
-        かつ target_date 時点でまだ通知されていないものを返す
+        """指定された時間スロットで通知すべきリマインダーを取得する。
+
+        リマインダー自体・紐づく生徒がともにアクティブなもののうち、指定された
+        曜日・時刻スロットに該当し、かつ target_date 時点でまだ通知されていない
+        ものを返す。ループ内で student / student.organization にアクセスして
+        もN+1が発生しないよう、select_related で事前ロードしている。
+
+        Args:
+            day_of_week (str): 対象の曜日を表す小文字文字列(例: "monday")。
+                StudyReminder.day_of_week と照合される。
+            start_time (time): 時刻スロットの開始時刻(この時刻を含む)。
+            end_time (time): 時刻スロットの終了時刻(この時刻を含まない)。
+            target_date (date): 処理対象日。この日付以降に通知済みのリマインダー
+                は除外される。
+
+        Returns:
+            QuerySet[StudyReminder]: 条件に合致するリマインダーのクエリセット。
+                各要素の student / student.organization は select_related 済み。
         """
         return (
             self.active()
             .with_active_student()
+            .select_related("student", "student__organization")
             .filter(
                 day_of_week=day_of_week,
                 time_of_day__gte=start_time,
@@ -94,24 +109,20 @@ class StudyReminderQuerySet(models.QuerySet):
 
         # 🏢 組織管理者
         if role == 'organization_administrator':
-            admin = getattr(user, 'organizationadministrator', None)
+            admin = user.get_role_object()
             if admin:
-                orgs = admin.organizations.all()
-                if orgs.exists():
-                    # 生徒の所属 organization を軸に絞り込み
-                    return qs.filter(student__organization__in=orgs)
+                # 生徒の所属 organization を軸に絞り込み
+                return qs.filter(student__organization_id=admin.organization_id)
             return self.none()
 
         # 🏫 教室管理者
         elif role == 'classroom_administrator':
-            admin = getattr(user, 'classroomadministrator', None)
+            admin = user.get_role_object()
             if admin:
-                qs = qs.filter(student__classrooms__in=admin.classrooms.all())
-                # ClassroomAdministrator.organization が入っている場合は
-                # 組織でも二重に絞り込んで防御を厚くする
-                org = getattr(admin, 'organization', None)
-                if org is not None:
-                    qs = qs.filter(student__organization=org)
+                qs = qs.filter(
+                    student__classrooms__in=admin.classrooms.all(),
+                    student__organization=admin.organization,
+                )
                 return qs
             return self.none()
 
@@ -121,13 +132,7 @@ class StudyReminderQuerySet(models.QuerySet):
             teacher = user.get_role_object()
             if teacher is None:
                 return self.none()
-            qs = qs.filter(student__teachers=teacher)
-
-            # Teacher.organization が設定済みなら、組織でも絞る
-            # （Teacher.organization が None の既存データは現状の挙動を維持）
-            org = getattr(teacher, 'organization', None)
-            if org is not None:
-                qs = qs.filter(student__organization=org)
+            qs = qs.filter(student__teachers=teacher, student__organization=teacher.organization)
             return qs
 
         # それ以外のロールには一切見せない
@@ -292,13 +297,7 @@ class StudyReminder(models.Model):
         #     return self.line_channel
 
         student = self.student
-        org = getattr(student, "organization", None)
-        if not org:
-            logger.warning(
-                "StudyReminder.resolve_line_channel: student %s has no organization",
-                student.id,
-            )
-            return None
+        org = student.organization
 
         line_channel = org.line_channels.filter(is_active=True).first()
         if not line_channel:

@@ -31,7 +31,7 @@ import logging
 import uuid
 from typing import Iterable, Optional, Type, TypeVar
 
-from django.db.models import QuerySet, Q
+from django.db.models import QuerySet
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
@@ -110,8 +110,7 @@ def visible_students_qs(user: BaseUser, base_qs: QuerySet[Student] | None = None
         role_obj = _safe_role_obj(user, role, OrganizationAdministrator)
         if role_obj is None:
             return qs.none()
-        orgs = role_obj.organizations.all()
-        return qs.filter(Q(organization__in=orgs)).distinct()
+        return qs.filter(organization_id=role_obj.organization_id)
 
     if role == "classroom_administrator":
         role_obj = _safe_role_obj(user, role, ClassroomAdministrator)

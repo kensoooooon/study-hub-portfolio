@@ -126,7 +126,7 @@ def _check_invited_user_status(*, normalized_email_address:str, organization_id:
         return
     if user.role == "organization_administrator":  # 組織管理者である
         role_object = _get_role_object_or_raise(user)
-        if role_object.organizations.filter(id=organization_id).exists():  # すでにその組織に割り当てられている
+        if role_object.organization_id == organization_id:  # すでにその組織に割り当てられている
             raise OrganizationAdministratorAlreadyAssignedError()
         raise OrganizationAdministratorExistsInAnotherOrganizationError()  # 別の組織に割り当てられている
     elif (user.role == "student") or (user.role == "teacher") or (user.role == "classroom_administrator"):  # 生徒、講師、教室管理者は単体

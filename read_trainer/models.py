@@ -117,9 +117,10 @@ class ReadingPassageQuerySet(models.QuerySet):
             return qs.filter(created_by_id=user.id)
 
         if role == "teacher":
-            qs = qs.filter(created_by__teachers=role_obj)
-            if role_obj.organization_id:
-                qs = qs.filter(created_by__organization=role_obj.organization)  # 異なる組織に紐づいた不正なデータの防止
+            qs = qs.filter(
+                created_by__teachers=role_obj,
+                created_by__organization=role_obj.organization,
+            )
             return qs.distinct()
 
         if role == "classroom_administrator":  # 管理教室に所属している生徒のもののみアクセス可能
@@ -129,7 +130,7 @@ class ReadingPassageQuerySet(models.QuerySet):
 
         if role == "organization_administrator":  # 自身の管理組織に所属している生徒のもののみアクセス可能
             return qs.filter(
-                created_by__organization__in=role_obj.get_accessible_organizations()
+                created_by__organization_id=role_obj.organization_id
             ).distinct()
 
         return qs.none()  # どれにも該当しない場合は安全側に倒して何も与えない
@@ -196,9 +197,10 @@ class ReadingQuestionQuerySet(models.QuerySet):
             return qs.filter(passage__created_by_id=user.id)
 
         if role == "teacher":
-            qs = qs.filter(passage__created_by__teachers=role_obj)
-            if role_obj.organization_id:
-                qs = qs.filter(passage__created_by__organization=role_obj.organization)  # 異なる組織に紐づいた不正な生徒を弾く
+            qs = qs.filter(
+                passage__created_by__teachers=role_obj,
+                passage__created_by__organization=role_obj.organization,
+            )
             return qs.distinct()
 
         if role == "classroom_administrator":  # 管理教室に所属している生徒のもののみアクセス可能
@@ -208,7 +210,7 @@ class ReadingQuestionQuerySet(models.QuerySet):
 
         if role == "organization_administrator":  # 自身の管理組織に所属している生徒のもののみアクセス可能
             return qs.filter(
-                passage__created_by__organization__in=role_obj.get_accessible_organizations()
+                passage__created_by__organization_id=role_obj.organization_id
             ).distinct()
 
         return qs.none()  # どれにも該当しない場合は安全側に倒して何も与えない
@@ -269,9 +271,10 @@ class ReadingAnswerQuerySet(models.QuerySet):
             return qs.filter(student_id=user.id)
 
         if role == "teacher":
-            qs = qs.filter(student__teachers=role_obj)
-            if role_obj.organization_id:
-                qs = qs.filter(student__organization=role_obj.organization)  # 異なる組織に紐づく生徒を弾く
+            qs = qs.filter(
+                student__teachers=role_obj,
+                student__organization=role_obj.organization,
+            )
             return qs.distinct()
 
         if role == "classroom_administrator":  # 管理教室に所属している生徒のもののみアクセス可能
@@ -281,7 +284,7 @@ class ReadingAnswerQuerySet(models.QuerySet):
 
         if role == "organization_administrator":  # 自身の管理組織に所属している生徒のもののみアクセス可能
             return qs.filter(
-                student__organization__in=role_obj.get_accessible_organizations()
+                student__organization_id=role_obj.organization_id
             ).distinct()
 
         return qs.none()  # どれにも該当しない場合は安全側に倒して何も与えない
@@ -339,9 +342,10 @@ class StudentReadingPassageProgressQuerySet(models.QuerySet):
             return qs.filter(student_id=user.id)
 
         if role == "teacher":
-            qs = qs.filter(student__teachers=role_obj)
-            if role_obj.organization_id:
-                qs = qs.filter(student__organization=role_obj.organization)  # 異なる組織に紐づいている不正なデータを弾く
+            qs = qs.filter(
+                student__teachers=role_obj,
+                student__organization=role_obj.organization,
+            )
             return qs.distinct()
 
         if role == "classroom_administrator":  # 管理教室に所属している生徒のもののみアクセス可能
@@ -351,7 +355,7 @@ class StudentReadingPassageProgressQuerySet(models.QuerySet):
 
         if role == "organization_administrator":  # 自身の管理組織に所属している生徒のもののみアクセス可能
             return qs.filter(
-                student__organization__in=role_obj.get_accessible_organizations()
+                student__organization_id=role_obj.organization_id
             ).distinct()
 
         return qs.none()  # どれにも該当しない場合は安全側に倒して何も与えない

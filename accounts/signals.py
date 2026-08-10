@@ -25,10 +25,6 @@ def validate_student_classrooms(sender, instance, action, pk_set, **kwargs):
     if action not in ("pre_add", "pre_set"):
         return
 
-    # まだ organization が決まっていない／移行中の場合はスキップ（方針に応じて調整可）
-    if not instance.organization_id:
-        return
-
     # これから紐付けようとしている教室
     invalid = Classroom.objects.filter(pk__in=pk_set).exclude(
         organization_id=instance.organization_id
@@ -48,10 +44,6 @@ def validate_teacher_classrooms(sender, instance, action, pk_set, **kwargs):
     """
     # 追加/差し替え時だけ見る（削除やclearは対象外）
     if action not in ("pre_add", "pre_set"):
-        return
-
-    # まだ organization が決まっていない／移行中の場合はスキップ（方針に応じて調整可）
-    if not instance.organization_id:
         return
 
     # これから紐付けようとしている教室のうち、所属組織の矛盾が発生するもの
@@ -74,10 +66,6 @@ def validate_classroom_administrator_classrooms(sender, instance, action, pk_set
     """
     # 追加/差し替え時だけ見る（削除やclearは対象外）
     if action not in ("pre_add", "pre_set"):
-        return
-
-    # まだ organization が決まっていない／移行中の場合はスキップ（方針に応じて調整可）
-    if not instance.organization_id:
         return
 
     # これから紐付けようとしている教室のうち、所属組織の矛盾が発生するもの

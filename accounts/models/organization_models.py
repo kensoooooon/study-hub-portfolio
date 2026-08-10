@@ -20,7 +20,8 @@ class Classroom(models.Model):
         ユーザーがその教室にアクセスできるかを判定
         """
         if user.role == 'organization_administrator':
-            return self.organization.administrators.filter(id=user.id).exists()
+            admin = user.get_role_object()
+            return admin is not None and admin.organization_id == self.organization_id
         elif user.role == 'classroom_administrator':
             return self.administrators.filter(id=user.id).exists()
         return False
@@ -33,7 +34,6 @@ class Organization(models.Model):
     
     class Meta:
         permissions = [  # 独自権限の設定
-            ("assign_organization_administrator", "Can assign user to organization administrator"),  # 組織に管理者を割り当て割当可能
             ('view_all_organizations', "Can view all organizations"),  # 全ての組織を閲覧可能
             ('invite_organization_administrator', "Invite new organization administrator"),  # 組織管理者として新規ユーザーを招待可能
         ]
@@ -52,7 +52,8 @@ class Organization(models.Model):
         ユーザーがこの組織にアクセスできるかを判定
         """
         if user.role == 'organization_administrator':
-            return self.administrators.filter(id=user.id).exists()
+            admin = user.get_role_object()
+            return admin is not None and admin.organization_id == self.pk
         elif user.role == 'classroom_administrator':
             return self.classrooms.filter(administrators__id=user.id).exists()
         return False

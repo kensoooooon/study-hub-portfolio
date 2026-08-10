@@ -1,7 +1,7 @@
 from .auth_views import CustomLoginView, CustomLogoutView
 from .line_views import RegisterNameView
 from .organization_admin_views import (
-    ClassroomCreateView, 
+    ClassroomCreateView,
     ClassroomEditView,
     ClassroomDeleteView,
     ClassroomListView,
@@ -28,8 +28,6 @@ from .ops_organization_views import (
     OrganizationListView,
     OrganizationDetailView,
     OrganizationCreateView,
-    OrganizationAdminSelectView,
-    OrganizationAssignAdminConfirmView,
     OrganizationAdminInvitationCreateView,
     OrganizationAdminInvitationAcceptView,
 )
@@ -62,8 +60,6 @@ __all__ = [
     "OrganizationListView",
     "OrganizationDetailView",
     "OrganizationCreateView",
-    "OrganizationAdminSelectView",
-    "OrganizationAssignAdminConfirmView",
     "OrganizationAdminInvitationCreateView",
     "OrganizationAdminInvitationAcceptView",
     "StudentReactivateView",

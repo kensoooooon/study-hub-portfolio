@@ -6,25 +6,22 @@ import logging
 import hashlib
 
 
-from django.views.generic import ListView, DetailView, CreateView, FormView, View
+from django.views.generic import ListView, DetailView, CreateView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib import messages
-from django.http import Http404
-from django.db import transaction
 from django.conf import settings
 from django.db.models import Q, Count
 
 from accounts.models import Organization
-from accounts.forms import OrganizationCreateForm, OrganizationAdminSelectForm
+from accounts.forms import OrganizationCreateForm
 from accounts.access_policies import (
     require_can_view_organization,
     require_can_add_organization,
-    require_can_assign_organization_administrator,
     require_can_invite_organization_administrator
     )
-from accounts.selectors import visible_organizations_qs, visible_organization_administrators_qs
+from accounts.selectors import visible_organizations_qs
 from accounts.services.invitations import invite_organization_administrator
 from accounts.services.exceptions import (
     InvalidEmailError,
@@ -161,165 +158,6 @@ class OrganizationCreateView(LoginRequiredMixin, CreateView):
         )
 
 
-class OrganizationAdminSelectView(LoginRequiredMixin, FormView):
-    """
-        dispatch()
-            ↓
-        post()
-            ↓
-        get_form()
-            ↓
-        get_form_class()
-            ↓
-        get_form_kwargs(): kwargsが設定
-            ↓
-        form_class(**kwargs)  ← __init__ が呼ばれる
-            ↓
-        form.is_valid()
-            ↓
-        form.full_clean()
-            ↓
-        ・各フィールドの clean
-        ・clean_<field>()
-        ・clean()
-            ↓
-        if True:
-            form_valid(form)   ← ★ここ
-        else:
-            form_invalid(form)
-
-        dispatch()
-        ↓
-        get()
-        ↓
-        get_form()
-        ↓
-        get_form_kwargs()
-        ↓
-        form_class(**kwargs)
-        ↓
-        render_to_response(context)
-    """
-    form_class = OrganizationAdminSelectForm
-    template_name = "accounts/ops_organization/admin_select.html"
-    
-    def dispatch(self, request, *args, **kwargs):
-        user = request.user
-        phase = "admin select dispatch"
-        org_id = self.kwargs.get("pk")
-        orgs = visible_organizations_qs(self.request.user)
-        self._org = get_object_or_404(orgs, pk=org_id)
-        log_dict = {
-            "phase": phase,
-            "user_id": user.id,
-            "role": getattr(user, "role", None),
-            "org_id": org_id,
-        }
-        require_can_assign_organization_administrator(user, log_dict=log_dict)
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["org_id"] = self._org.id
-        context["org_name"] = self._org.name
-        candidate_qs = self.get_org_admin_candidates()
-        context["has_candidates"] = candidate_qs.exists()
-        return context
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        candidate_qs = self.get_org_admin_candidates()
-        kwargs["candidate_qs"] = candidate_qs
-        return kwargs
-
-    def form_valid(self, form):
-        org_id = self.kwargs["pk"]
-        org = get_object_or_404(visible_organizations_qs(self.request.user), pk=org_id)
-
-        selected_admins = form.cleaned_data["admins"]  # ← 既に候補QSで検証済み
-
-        return render(self.request, "accounts/ops_organization/admin_confirm.html", {
-            "org": org,
-            "org_name": org.name,
-            "selected_admins": selected_admins,
-        })
-    
-    def get_org_admin_candidates(self):
-        """
-        組織管理者のうち、既に組織に登録されている人を除く人たちを返す
-        """
-        candidate_qs = visible_organization_administrators_qs(self.request.user)
-        candidate_qs = candidate_qs.exclude(organizations=self._org)
-        return candidate_qs
-
-
-class OrganizationAssignAdminConfirmView(LoginRequiredMixin, View):
-    def dispatch(self, request, *args, **kwargs):
-        user = request.user
-        phase = "admin select confirm dispatch"
-        org_id = self.kwargs.get("pk")
-        orgs = visible_organizations_qs(self.request.user)
-        self._org = get_object_or_404(orgs, pk=org_id)
-        log_dict = {
-            "phase": phase,
-            "user_id": user.id,
-            "role": getattr(user, "role", None),
-            "org_id": org_id,
-        }
-        require_can_assign_organization_administrator(user, log_dict=log_dict)
-        return super().dispatch(request, *args, **kwargs)
-    
-    def post(self, request, *args, **kwargs):
-        raw_admin_ids = request.POST.getlist("admin_ids")
-        if not raw_admin_ids:
-            messages.error(request, "割り当てたい組織管理者が選択されていません。")
-            return redirect("ops_organization:list")
-
-        # 重複検知（ログだけ）
-        deduped_ids = list(dict.fromkeys(raw_admin_ids))  # 順序維持で重複除去（任意）
-        if len(raw_admin_ids) != len(deduped_ids):
-            logger.warning(
-                "入力された管理者IDに重複が存在します。",
-                extra={
-                    "user_id": request.user.id,
-                    "org_id": self._org.id,
-                    "raw_count": len(raw_admin_ids),
-                    "deduped_count": len(deduped_ids),
-                },
-            )
-
-        admin_ids = set(deduped_ids)
-
-        candidate_qs = (
-            visible_organization_administrators_qs(request.user)
-            .exclude(organizations=self._org)
-        )
-        admins = list(candidate_qs.filter(pk__in=admin_ids))
-
-        # 差分チェック（改ざん耐性）
-        actual_ids = {str(a.pk) for a in admins}
-        expected_ids = {str(x) for x in admin_ids}
-
-        missing_ids = sorted(expected_ids - actual_ids)  # 候補外/存在しない
-        if missing_ids:
-            logger.warning(
-                "存在しない/候補外の組織管理者IDが指定されています。",
-                extra={
-                    "user_id": request.user.id,
-                    "org_id": self._org.id,
-                    "missing_ids": missing_ids[:20],  # ログ肥大化防止
-                    "missing_count": len(missing_ids),
-                },
-            )
-            raise Http404
-
-        with transaction.atomic():
-            self._org.administrators.add(*admins)
-
-        messages.success(request, "組織管理者の割当が完了しました。")
-        return redirect(reverse("ops_organization:detail", kwargs={"pk": self._org.pk}))
-
-    
 class OrganizationAdminInvitationCreateView(LoginRequiredMixin, FormView):
     """
     組織管理者招待作成画面の表示、および招待を担当する

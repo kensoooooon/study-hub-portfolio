@@ -31,10 +31,6 @@ def _require_perms_or_404(user, perms: Iterable[str], *, log_dict: Optional[dict
             _raise_404(ctx)
 
 
-def require_can_assign_organization_administrator(user, *, log_dict: Optional[dict] = None) -> None:
-    _require_perms_or_404(user, ["accounts.assign_organization_administrator"], log_dict=log_dict)
-
-
 def require_can_add_organization(user, *, log_dict: Optional[dict] = None) -> None:
     _require_perms_or_404(user, ["accounts.add_organization"], log_dict=log_dict)
     

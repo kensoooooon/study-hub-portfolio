@@ -1,7 +1,6 @@
 from django import forms
 from django.conf import settings
 from django.db.models import Q
-from django.forms import CheckboxSelectMultiple
 from django.core.exceptions import ValidationError
 
 from accounts.models import BaseUser,Student, Teacher, OrganizationAdministrator, ClassroomAdministrator
@@ -31,7 +30,7 @@ class ClassroomCreateForm(forms.ModelForm):
 
 class ClassroomEditForm(forms.ModelForm):
     administrators = forms.ModelMultipleChoiceField(
-        queryset=ClassroomAdministrator.objects.all(),
+        queryset=ClassroomAdministrator.objects.none(),
         widget=forms.CheckboxSelectMultiple,
         required=False,
         label="教室管理者"
@@ -52,10 +51,12 @@ class ClassroomEditForm(forms.ModelForm):
 
         # 組織管理者のみが教室管理者を設定可能
         if self.current_user and self.current_user.role == 'organization_administrator':
-            admin = getattr(self.current_user, 'organizationadministrator', None)
+            admin = self.current_user.get_role_object()
             if admin:
-                self.fields['administrators'].queryset = ClassroomAdministrator.objects.filter(
-                    classrooms__organization__in=admin.organizations.all()
+                self.fields["administrators"].queryset = (
+                    ClassroomAdministrator.objects.filter(
+                        organization_id=admin.organization_id,
+                    )
                 )
         else:
             del self.fields['administrators']  # 教室管理者には表示しない
@@ -149,10 +150,7 @@ class StudentEditForm(forms.ModelForm):
 
             if role == "organization_administrator" and isinstance(role_obj, OrganizationAdministrator):
                 # 管理している組織に属する講師のみ
-                managed_orgs = role_obj.organizations.all()
-                qs = Teacher.objects.filter(
-                    organization__in=managed_orgs
-                )
+                qs = Teacher.objects.filter(organization_id=role_obj.organization_id)
 
             elif role == "classroom_administrator" and isinstance(role_obj, ClassroomAdministrator):
                 # 管理している教室に所属している講師のみ
@@ -161,7 +159,7 @@ class StudentEditForm(forms.ModelForm):
                 )
 
         # さらに「生徒の所属組織」に絞る（二重チェック）
-        if self.student and self.student.organization_id:
+        if self.student:
             qs = qs.filter(organization=self.student.organization)
 
         self.fields["teachers"].queryset = qs.distinct()
@@ -232,7 +230,7 @@ class TeacherCreateForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.current_user = kwargs.pop('current_user', None)
-        classrooms_queryset = kwargs.pop('classrooms_queryset', Classroom.objects.none())  
+        classrooms_queryset = kwargs.pop('classrooms_queryset', Classroom.objects.none())
         super().__init__(*args, **kwargs)
 
         # アクセス可能な教室のみを選択肢にする
@@ -240,20 +238,17 @@ class TeacherCreateForm(forms.ModelForm):
 
 
     def save(self, commit=True):
-        teacher = super().save(commit=False)
+        teacher = super().save(commit=False)  # 一旦DBに保存せず、必要な情報を後から追加していく
         password = self.cleaned_data.get("password")
-        classrooms = self.cleaned_data.get("classrooms")  # 修正ポイント
+        classrooms = self.cleaned_data.get("classrooms")
 
         if password:
             teacher.set_password(password)
         else:
-            teacher.set_default_password()
+            teacher.set_password(settings.TEACHER_DEFAULT_PASSWORD)  # SET_DEFAULT_PASSWORDだとsaveが走る
+            teacher.is_first_login = True
 
-        if classrooms:
-            org = classrooms[0].organization
-            teacher.organization = org
-
-        if commit:
+        if commit: # 引数で与えられているものを取る。super側ではない点に注意
             teacher.save()
             teacher.classrooms.set(classrooms)  # 教室を適切に紐付ける
         return teacher
@@ -261,7 +256,30 @@ class TeacherCreateForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         self.instance.role = 'teacher'  # 新規作成時にroleを補完
+
+        classrooms = cleaned_data.get('classrooms')
+        if classrooms:
+            organization_ids = set(classrooms.values_list('organization_id', flat=True))  # ToDo: 同一の組織管理者が異なる組織を持っている場合は後発のissueでルールを決めること
+            if len(organization_ids) > 1:
+                raise ValidationError(
+                    {'classrooms': '選択した教室が複数の組織にまたがっています。同一組織内の教室を選択してください。'}
+                )
+            self.instance.organization_id = organization_ids.pop()
+
         return cleaned_data
+
+    def _post_clean(self):
+        # 教室が1つも確定しなかった場合（未選択 / 選択教室が全て権限外）、
+        # organization_idが未確定のままTeacher.clean()が呼ばれ、
+        # Teacher.organization.RelatedObjectDoesNotExistで500になるのを防ぐ。
+        # モデル側のorganization_idガード化は別途対応する。
+        try:
+            super()._post_clean()
+        except Teacher.organization.RelatedObjectDoesNotExist:
+            self.add_error(
+                'classrooms',
+                '所属組織を確定できませんでした。教室を選択してください。'
+            )
 
     def clean_classrooms(self):
         classrooms = self.cleaned_data.get('classrooms')
@@ -401,42 +419,6 @@ class OrganizationCreateForm(forms.ModelForm):
         return name
 
 
-class OrganizationAdminSelectForm(forms.Form):
-    """
-    組織に割り当てる OrganizationAdministrator を複数選択するフォーム。
-    queryset は View 側から注入する（改ざん耐性のため）。
-
-    form.is_valid()
-    ↓
-    form.full_clean()
-    ↓
-    1) 各フィールドのバリデーション
-    2) clean_<fieldname>()
-    3) form.clean()
-
-    """
-    admins = forms.ModelMultipleChoiceField(
-        queryset=OrganizationAdministrator.objects.none(),
-        required=True,
-        widget=CheckboxSelectMultiple,
-        label="割り当てる組織管理者",
-    )
-
-    def __init__(self, *args, candidate_qs=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        if candidate_qs is None:
-            candidate_qs = OrganizationAdministrator.objects.none()
-        self.fields["admins"].queryset = candidate_qs
-
-    def clean_admins(self):
-        admins = self.cleaned_data["admins"]
-        # 任意: 件数上限（事故防止・UI崩壊防止）
-        MAX_ASSIGN = 20
-        if admins.count() > MAX_ASSIGN:
-            raise forms.ValidationError(f"一度に割り当てられる人数は最大 {MAX_ASSIGN} 人です。")
-        return admins
-
-
 class StudentEmailRegistrationForm(forms.Form):
     """LINE経由メール登録フォーム。検証はフォーマットのみ、正規化・衝突チェックはサービス側で行う。"""
     email = forms.EmailField(
@@ -448,7 +430,7 @@ class StudentEmailRegistrationForm(forms.Form):
 
 class OrganizationAdminInvitationCreateForm(forms.Form):
     email = forms.EmailField(label="招待メールアドレス", max_length=254)
-    
+
 
 class OrganizationAdminInvitationAcceptForm(forms.Form):
     username = forms.CharField(
@@ -481,7 +463,7 @@ class OrganizationAdminInvitationAcceptForm(forms.Form):
         if any(ch in s for ch in ["\n", "\r", "\t", " "]):
             raise forms.ValidationError(f"{label}に空白や改行を含めないでください。")
         return s
-    
+
     def clean_username(self):
         username = self.cleaned_data.get("username") or ""
         username = self._reject_whitespace(username, "ユーザー名")
@@ -493,12 +475,12 @@ class OrganizationAdminInvitationAcceptForm(forms.Form):
 
         if len(password) < 8:  # 後々Django標準のパスワード認証と入れ替える機能
             raise forms.ValidationError("短すぎます。8文字以上入力してください。")
-        
+
         return password
-    
+
     def clean(self):
         cleaned = super().clean()
-        
+
         password1 = cleaned.get("password")
         password2 = cleaned.get("password_confirm")
         if password1 and password2 and (password1 != password2):

@@ -141,10 +141,10 @@ def create_org_admin(*, username: str, email: str, password: str, organization: 
         email=email,
         role=InvitationRole.ORG_ADMIN,
         is_first_login=False,
+        organization=organization,
     )
     user.set_password(password)
     user.save()
-    user.organizations.add(organization)
     return user
 
 
