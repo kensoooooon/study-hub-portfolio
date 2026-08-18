@@ -292,6 +292,7 @@ Examples:
 * transaction or `on_commit`
 * role object assumptions
 * outdated test expectations
+* exhaustive / repository-wide search intended to prove complete coverage (e.g. "find every place X happens", "list all callers of Y") — see the `Search completeness` pattern
 
 Read order:
 
@@ -390,6 +391,7 @@ When reviewing or implementing, pay special attention to:
 * open redirect
 * migration effects on existing data
 * tests that encode outdated expectations
+* M2M write surface (forward / reverse / through-direct) when tenant, role, or integrity enforcement depends on it — see CLAUDE.md's M2M write-surface rule
 
 ---
 

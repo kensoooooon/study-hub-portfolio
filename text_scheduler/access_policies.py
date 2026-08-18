@@ -90,7 +90,17 @@ def _safe_role_obj(user: BaseUser, role: str, expected_type: Type[T]) -> Optiona
 
 
 def visible_students_qs(user: BaseUser, base_qs: QuerySet[Student] | None = None) -> QuerySet[Student]:
-    qs = base_qs if base_qs is not None else Student.objects.all()
+    """最大可視範囲の生徒クエリセットを返す
+
+    Args:
+        user (BaseUser): 対象となるユーザー
+        base_qs (QuerySet[Student] | None, optional): 外部から明示的に指定されるデフォルトのクエリセット
+
+    Returns:
+        QuerySet[Student]: ユーザーに応じた最大可視範囲の生徒クエリセット
+    """
+    qs = base_qs if base_qs is not None else Student.objects.active()
+    qs = qs.filter(is_active=True)
 
     if not getattr(user, "is_active", False):
         return qs.none()
@@ -100,26 +110,26 @@ def visible_students_qs(user: BaseUser, base_qs: QuerySet[Student] | None = None
 
     role = getattr(user, "role", None)
 
-    if role == "student":
+    if role == "student":  # 自身のみ閲覧可能
         role_obj = _safe_role_obj(user, role, Student)
         if role_obj is None:
             return qs.none()
         return qs.filter(id=role_obj.id)
 
-    if role == "organization_administrator":
+    if role == "organization_administrator":  # 自身の管理している組織に所属する生徒のみ閲覧可能
         role_obj = _safe_role_obj(user, role, OrganizationAdministrator)
         if role_obj is None:
             return qs.none()
         return qs.filter(organization_id=role_obj.organization_id)
 
-    if role == "classroom_administrator":
+    if role == "classroom_administrator":  # 自身の管理している教室に所属する生徒のみ閲覧可能
         role_obj = _safe_role_obj(user, role, ClassroomAdministrator)
         if role_obj is None:
             return qs.none()
         classrooms = role_obj.get_accessible_classrooms()
         return qs.filter(classrooms__in=classrooms).distinct()
 
-    if role == "teacher":
+    if role == "teacher":  # 自身の担当している生徒のみ閲覧可能
         role_obj = _safe_role_obj(user, role, Teacher)
         if role_obj is None:
             return qs.none()
@@ -132,8 +142,6 @@ def visible_students_qs(user: BaseUser, base_qs: QuerySet[Student] | None = None
         role,
     )
     return qs.none()
-
-
 
 
 def visible_materials_qs(user: BaseUser, base_qs: QuerySet[LearningMaterial] | None = None) -> QuerySet[LearningMaterial]:
@@ -260,49 +268,3 @@ def get_accessible_material_or_404(request) -> LearningMaterial:
         raise Http404
 
     return get_accessible_material_by_id_or_404(request.user, raw_material_id)
-
-
-# =========================================================
-# bool判定系
-# =========================================================
-def student_can_be_accessed_by(user: BaseUser, student: Student) -> bool:
-    """特定の生徒に対して、あるユーザーがアクセス可能かどうかを判定
-
-    Args:
-        user (BaseUser): 判定対象となるユーザー
-        student (Student): アクセスしたい生徒
-
-    Returns:
-        (bool): アクセスの可否
-
-    Note:
-        既に Student オブジェクトがある状況で「アクセス可能か」を bool で返す。
-        原則: 外部入力からの取得は get_accessible_*_or_404 / visible_*_qs を使う。
-    """
-    if not getattr(user, "is_active", False):
-        return False
-    if getattr(user, "is_superuser", False):
-        return True
-    # “可視範囲QSに含まれるか” で判定（DB1回）
-    return visible_students_qs(user).filter(id=student.id).exists()
-
-
-def material_can_be_accessed_by(user: BaseUser, material: LearningMaterial) -> bool:
-    """特定の教材に対して、あるユーザーがアクセス可能かどうかを判定
-
-    Args:
-        user (BaseUser): 判定対象となるユーザー
-        material (LearningMaterial): アクセスしたい教材
-
-    Returns:
-        bool: アクセスの可否
-    
-    Note:
-        既に LearningMaterial オブジェクトがある状況で「アクセス可能か」を bool で返す
-        原則: 外部入力からの取得は get_accessible_*_or_404 / visible_*_qs を使う。
-    """
-    if not getattr(user, "is_active", False):
-        return False
-    if getattr(user, "is_superuser", False):
-        return True
-    return visible_materials_qs(user).filter(id=material.id).exists()

@@ -36,4 +36,4 @@ extract_pdf.py
 # claudeのやつ
 .claude/
 claude/
-CLAUDE.md
+/CLAUDE.md

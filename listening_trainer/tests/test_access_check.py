@@ -31,9 +31,9 @@ class StudentAccessCheckTest(TestCase):
         cls.org1_admin = OrganizationAdministrator.objects.create_user(
             username="org1_admin",
             email="org1_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
-        cls.org1_admin.organizations.add(cls.org1)
 
         cls.class1_1 = Classroom.objects.create(name="class1_1", organization=cls.org1)
         cls.class1_1_admin = ClassroomAdministrator.objects.create_user(
@@ -117,8 +117,8 @@ class StudentAccessCheckTest(TestCase):
             username="org2_admin",
             email="org2_admin@example.com",
             password="pass123456",
+            organization=cls.org2,
         )
-        cls.org2_admin.organizations.add(cls.org2)
 
         cls.class2_teacher = Teacher.objects.create_user(
             username="class2_teacher",
@@ -129,7 +129,16 @@ class StudentAccessCheckTest(TestCase):
         cls.class2_teacher.classrooms.add(cls.class2)
 
         cls.class1_2_active_student.teachers.add(cls.class1_1_teacher)
+
+        # データ上は担当関係があっても、異なる組織の生徒はアクセス不可であることを確認するため
+        # 追加時点ではclass1_1_teacherと同じ組織にしておき、
+        # validate_student_teachersシグナル(issue #140)のpre_addガードを通過させたうえで、
+        # 元のorganization(org2)へ戻し「異なる組織なのに担当関係がある」不整合を再現する
+        cls.class2_active_student.organization = cls.org1
+        cls.class2_active_student.save(update_fields=["organization"])
         cls.class2_active_student.teachers.add(cls.class1_1_teacher)
+        cls.class2_active_student.organization = cls.org2
+        cls.class2_active_student.save(update_fields=["organization"])
 
     def login_as_classroom_admin(self):
         ok = self.client.login(email="class1_1_admin@example.com", password="pass123456")
@@ -308,6 +317,7 @@ class StudentAccessCheckTest(TestCase):
             username="unexpected_role_user_lt",
             email="unexpected_role_user_lt@example.com",
             password="pass123456",
+            organization=self.org1,
         )
         user.role = "unexpected_role"
 
@@ -408,9 +418,9 @@ class ListeningPassageCheckTest(TestCase):
         cls.org1_admin = OrganizationAdministrator.objects.create_user(
             username="org1_admin",
             email="org1_admin@example.com",
-            password="pass123456"
+            password="pass123456",
+            organization=cls.org1,
         )
-        cls.org1_admin.organizations.add(cls.org1)
 
         cls.class1_1 = Classroom.objects.create(name="class1_1", organization=cls.org1)
         cls.class1_1_admin = ClassroomAdministrator.objects.create_user(
@@ -494,8 +504,8 @@ class ListeningPassageCheckTest(TestCase):
             username="org2_admin",
             email="org2_admin@example.com",
             password="pass123456",
+            organization=cls.org2,
         )
-        cls.org2_admin.organizations.add(cls.org2)
 
         cls.class2_teacher = Teacher.objects.create_user(
             username="class2_teacher",
@@ -506,7 +516,16 @@ class ListeningPassageCheckTest(TestCase):
         cls.class2_teacher.classrooms.add(cls.class2)
 
         cls.class1_2_active_student.teachers.add(cls.class1_1_teacher)
+
+        # データ上は担当関係があっても、異なる組織の生徒はアクセス不可であることを確認するため
+        # 追加時点ではclass1_1_teacherと同じ組織にしておき、
+        # validate_student_teachersシグナル(issue #140)のpre_addガードを通過させたうえで、
+        # 元のorganization(org2)へ戻し「異なる組織なのに担当関係がある」不整合を再現する
+        cls.class2_active_student.organization = cls.org1
+        cls.class2_active_student.save(update_fields=["organization"])
         cls.class2_active_student.teachers.add(cls.class1_1_teacher)
+        cls.class2_active_student.organization = cls.org2
+        cls.class2_active_student.save(update_fields=["organization"])
 
         cls.class1_1_active_student_textbook_passage = ListeningPassage.objects.create(
             title="sample passage title",

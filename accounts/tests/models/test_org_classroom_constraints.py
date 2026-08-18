@@ -90,17 +90,34 @@
         状態を作った場合、ClassroomAdministrator.clean() が ValidationError を投げる
 
 ============================================================
+【7】StudentOrganizationTeachersSignalTests（Student.teachers の m2m シグナルの動作確認、issue #140）
+------------------------------------------------------------
+目的：
+    Student.teachers (ManyToMany、Student側がオーナー) に講師を追加する際、
+    生徒の所属組織（student.organization）と異なる組織の講師が
+    誤って紐付けられないことを保証する。
+
+検証内容：
+    ・同一組織の講師 → 順方向（student.teachers.add）・逆方向（teacher.students.add）
+        いずれも正常に追加される
+    ・異なる組織の講師 → 順方向・逆方向いずれも m2m_changed シグナルにより
+        ValidationError が発生し、関係が追加されないことを確認する
+        （m2m_changed は呼び出し方向で instance/pk_set が入れ替わるため、
+        双方向の検証が必要）
+
+============================================================
 本テスト全体の目的：
     「生徒／講師／教室管理者の所属組織（organization）を真とする」という仕様のもと、
 
     ・ビュー（未割当生徒一覧など）
     ・フォーム（AssignClassroomForm や Teacher 作成フォーム等の前提となる制約）
     ・モデル（Student.clean / Teacher.clean / ClassroomAdministrator.clean）
-    ・シグナル（Student / Teacher / ClassroomAdministrator に対する m2m_changed）
+    ・シグナル（Student.classrooms / Teacher.classrooms / ClassroomAdministrator.classrooms /
+        Student.teachers に対する m2m_changed）
 
     これらが一貫して、
     『Student / Teacher / ClassroomAdministrator が
-        自身の所属組織と異なる組織の教室に誤って紐付かない』
+        自身の所属組織と異なる組織の教室・講師・生徒に誤って紐付かない』
     という制約を正しく維持できているかを包括的に検証する。
 
 この整合性が確認されることで、今後のリマインダー機能や
@@ -230,15 +247,15 @@ class UnassignedStudentListViewTests(TestCase):
             email="admin1@example.com",
             username="OrgAdmin1",
             role="organization_administrator",
+            organization=self.org1,
         )
-        self.org_admin1.organizations.add(self.org1)
 
         self.org_admin2 = OrganizationAdministrator.objects.create(
             email="admin2@example.com",
             username="OrgAdmin2",
             role="organization_administrator",
+            organization=self.org2,
         )
-        self.org_admin2.organizations.add(self.org2)
 
         # 未割り当て生徒（教室なし）を各組織に1人ずつ
         self.student_org1 = Student.objects.create(
@@ -329,8 +346,8 @@ class AssignClassroomFormTests(TestCase):
             email="admin1@example.com",
             username="OrgAdmin1",
             role="organization_administrator",
+            organization=self.org1,
         )
-        self.org_admin1.organizations.add(self.org1)
 
     def test_form_limits_queryset_by_organization(self):
         """
@@ -561,3 +578,90 @@ class ClassroomAdminCleanMethodTests(TestCase):
 
         with self.assertRaises(ValidationError):
             self.classroom_admin_org1.clean()
+
+
+# ============================================================
+# 【7】StudentOrganizationTeachersSignalTests
+#      （Student.teachers の m2m_changed シグナルの動作確認、issue #140）
+# ============================================================
+
+class StudentOrganizationTeachersSignalTests(TransactionTestCase):
+    """
+    Student.teachers に対して m2m 追加を行う際、
+    student.organization と異なる organization の講師が紐付かないことを
+    m2m_changed シグナル（validate_student_teachers）で保証できているかを検証する。
+
+    issue #140: これまで Student.teachers.through には m2m_changed のバリデーションが
+    存在せず、student.teachers.add(他組織の講師) は書き込みレベルでは検出されずに
+    成功していた（Student.clean() や StudentEditForm 経由でしか防げなかった）。
+    本クラスはその回帰を防ぐための regression test 群。
+    順方向（student.teachers.add）・逆方向（teacher.students.add）の両方を検証する。
+    """
+
+    def setUp(self):
+        self.org1 = Organization.objects.create(name="Org 1")
+        self.org2 = Organization.objects.create(name="Org 2")
+
+        self.teacher_org1 = Teacher.objects.create(
+            username="Teacher Org1 For Student Teachers M2M",
+            email="teacher_org1_for_student_teachers_m2m@example.com",
+            role="teacher",
+            organization=self.org1,
+        )
+        self.teacher_org2 = Teacher.objects.create(
+            username="Teacher Org2 For Student Teachers M2M",
+            email="teacher_org2_for_student_teachers_m2m@example.com",
+            role="teacher",
+            organization=self.org2,
+        )
+
+        self.student_org1 = Student.objects.create(
+            username="Student Org1 For Teachers M2M",
+            line_user_id="U-STUDENT-ORG1-TEACHERS-M2M",
+            organization=self.org1,
+        )
+
+    def test_add_teacher_same_organization_ok(self):
+        """
+        生徒と同じ organization の講師は正常に紐付けられる（順方向 student.teachers.add）。
+        issue #140 で追加した validate_student_teachers シグナルの
+        正常系（同組織）を保証する regression test。
+        """
+        self.student_org1.teachers.add(self.teacher_org1)
+        self.student_org1.refresh_from_db()
+        self.assertIn(self.teacher_org1, self.student_org1.teachers.all())
+
+    def test_add_teacher_different_organization_raises_validation_error(self):
+        """
+        生徒と異なる organization の講師を紐付けようとすると（順方向 student.teachers.add）、
+        validate_student_teachers シグナル（m2m_changed）により ValidationError が発生し、
+        実際には紐付かないことを確認する。issue #140 の回帰防止テスト。
+        """
+        with self.assertRaises(ValidationError):
+            self.student_org1.teachers.add(self.teacher_org2)
+        self.assertNotIn(self.teacher_org2, self.student_org1.teachers.all())
+
+    def test_add_student_via_teacher_reverse_manager_same_organization_ok(self):
+        """
+        講師と同じ organization の生徒は、逆方向（teacher.students.add）でも
+        正常に紐付けられる。
+        issue #140 で追加した validate_student_teachers シグナルが、
+        reverse kwarg を見て順方向・逆方向どちらの呼び出しにも対応していることを
+        保証する regression test。
+        """
+        self.teacher_org1.students.add(self.student_org1)
+        self.teacher_org1.refresh_from_db()
+        self.assertIn(self.student_org1, self.teacher_org1.students.all())
+
+    def test_add_student_via_teacher_reverse_manager_different_organization_raises_validation_error(self):
+        """
+        講師と異なる organization の生徒を、逆方向（teacher.students.add）で
+        紐付けようとすると ValidationError が発生し、実際には紐付かないことを確認する。
+
+        m2m_changed は呼び出し方向によって instance/pk_set が入れ替わるため
+        （instance=Teacher, pk_set=Student の pk 集合）、順方向のみを前提にした実装だと
+        このケースを検出できない。issue #140 で reverse 対応したことの回帰防止テスト。
+        """
+        with self.assertRaises(ValidationError):
+            self.teacher_org2.students.add(self.student_org1)
+        self.assertNotIn(self.student_org1, self.teacher_org2.students.all())

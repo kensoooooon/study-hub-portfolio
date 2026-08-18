@@ -265,39 +265,16 @@ class StudentEditView(LoginRequiredMixin, UpdateView):
         if form.cleaned_data.get("reset_password"):
             self.object.set_default_password()
 
-        # ★ 教室と講師の整合性を補完する
+        # 担当講師の所属教室に、生徒の所属教室を自動追加する
+        # （教室・講師と生徒の組織整合性は Student.clean() と
+        #   accounts/signals.py の m2m_changed シグナルにより
+        #   この時点で既に保証されているため、ここでの再チェックは行わない）
         student = self.object
         student_classrooms = list(student.classrooms.all())
         student_teachers = list(student.teachers.all())
 
         for teacher in student_teachers:
-            if teacher.organization_id != student.organization_id:
-                logger.error(
-                    "教師と生徒の所属組織に不整合が生じています。",
-                    extra={
-                        "student_id": student.id,
-                        "student_org_id": student.organization_id,
-                        "teacher_id": teacher.id,
-                        "teacher_org_id": teacher.organization_id,
-                        "view": "StudentEditView",
-                    },
-                )
-                continue
-
             for classroom in student_classrooms:
-                if classroom.organization_id != student.organization_id:
-                    logger.error(
-                        "教室と生徒の所属組織に不整合が生じています。",
-                        extra={
-                            "student_id": student.id,
-                            "student_org_id": student.organization_id,
-                            "classroom_id": classroom.id,
-                            "classroom_org_id": classroom.organization_id,
-                            "view": "StudentEditView",
-                        },
-                    )
-                    continue
-
                 # 担当している生徒の所属教室が、講師側の所属教室に存在していない
                 if not teacher.classrooms.filter(id=classroom.id).exists():
                     logger.info(

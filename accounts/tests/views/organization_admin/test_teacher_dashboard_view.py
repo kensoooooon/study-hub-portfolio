@@ -34,8 +34,8 @@ class TeacherDashboardViewTest(TestCase):
             username="org_admin",
             password="pass123456",
             role="organization_administrator",
+            organization=cls.org,
         )
-        cls.org_admin.organizations.add(cls.org)
 
         cls.class_admin = ClassroomAdministrator.objects.create_user(
             email="class_admin@example.com",
@@ -227,11 +227,23 @@ class TeacherDashboardViewTest(TestCase):
 
     def test_teacher_cannot_see_student_in_other_organization(self):
         """
-        講師は他組織の生徒を見られない
+        講師は他組織の生徒を見られない（ダッシュボードのqueryset側での防御を確認）。
 
-        このテスト怪しくない？
+        issue #140でvalidate_student_teachersシグナルを追加したことにより、
+        target_student3.teachers.add(self.teacher)（組織が異なる）はM2M書き込み時点で
+        ValidationErrorになるようになった。そのため「万一M2Mがついてしまっている」という
+        不整合状態を、一時的にorganizationをteacherと合わせてpre_addガードを通過させたのち、
+        元のorganization（other_org）へ戻すことで作為的に再現する。
         """
+        # 追加時点ではteacherと同じorganizationにしておき、
+        # validate_student_teachersシグナル(issue #140)のpre_addガードを通過させる
+        self.target_student3.organization = self.org
+        self.target_student3.save(update_fields=["organization"])
         self.target_student3.teachers.add(self.teacher)  # 万一M2Mがついても見えないことを確認
+        # 元のorganization(other_org)へ戻し、「他組織なのにM2Mがついている」不整合を再現する
+        self.target_student3.organization = self.other_org
+        self.target_student3.save(update_fields=["organization"])
+
         self.login_as_teacher()
 
         resp = self.client.get(self.url_to_teacher_dashboard)
