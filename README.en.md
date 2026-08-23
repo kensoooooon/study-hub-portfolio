@@ -1,4 +1,4 @@
-# Django Study Hub — AI-Powered Educational SaaS
+# Django Study Hub — AI-Powered Learning Support System
 
 > **Note:** This is a sanitized version of a production codebase. Client-specific configurations and production credentials have been removed. The full development history (Issues and commits) is maintained in a private repository; commits here represent milestone syncs of working features.
 
@@ -52,7 +52,7 @@ The moat isn't the AI. It's the institutional data and local specificity around 
 
 **Problem:** "Study until it feels easy" produces shallow retention. I wanted learning mechanics grounded in how memory actually works.
 
-**Decision:** Implemented the SuperMemo-2 algorithm across all trainer modules, tracking `ease_factor`, `interval`, and `next_due_at` per item per student.
+**Decision:** Implemented the SuperMemo-2 algorithm separately in each of several learning modules (vocabulary, reading, listening), tracking `ease_factor`, `interval`, and `next_due_at` per item per student. Unifying the implementation across modules is a future consideration.
 
 **Tradeoff:** More complex model than a simple right/wrong tracker. Worth it because it produces meaningfully better study schedules than arbitrary repetition.
 
@@ -135,7 +135,7 @@ The workflow above isn't just a description — it's backed by a document system
 
 **What's working:**
 - Daily Q&A traffic on the LINE channel — the original problem (late-night unanswered questions) is solved
-- Reminders delivering reliably through the Pub/Sub pipeline
+- Reminders deliver through the Pub/Sub pipeline; duplicate-delivery protection on message redelivery is not yet implemented
 - Production system has stayed stable — not trivial for a solo developer running live infrastructure for the first time at this scale
 
 **What's not working yet:**
@@ -150,7 +150,7 @@ Getting LINE users to navigate to the trainer content. I added reminder-to-conte
 
 **Make Organization mandatory from day one.**
 
-I added the Organization model after the initial build, when I started thinking about multi-tenant commercial use. The problem: I didn't enforce it at registration, so some users ended up with no organization affiliation. Retrofitting a NOT NULL constraint onto a live schema is painful — I deferred it with `null=True, blank=True` and added rescue paths for orphaned users. Those rescue paths now create subtle ambiguity in tenant data boundaries, and I'm still working through that carefully.
+I added the Organization model after the initial build, when I started thinking about multi-tenant commercial use. The problem: I didn't enforce it at registration, so some users ended up with no organization affiliation. Retrofitting a NOT NULL constraint onto a live schema required a backfill and a staged migration. I also audited the rescue-path fallback code that had been added for orphaned users, and removed it once it became dead code after the required-field migration (completed August 2026).
 
 The lesson: schema decisions about multi-tenant boundaries have outsized long-term cost. "Add it later" is expensive when "later" arrives.
 
@@ -180,7 +180,7 @@ Early on, I added features based on what I thought was needed. The result: I now
 
 | Metric | Value |
 |--------|-------|
-| Django apps | 11 |
+| Django apps | 13 registered, 11 wired into URL routing (chem_trainer and kobun_trainer not yet connected) |
 | Models | 40+ |
 | Subjects | English vocabulary, listening, reading, mathematics (chemistry and classical Japanese in development) |
 | User roles | 4 (Organization Admin / Classroom Admin / Teacher / Student)
