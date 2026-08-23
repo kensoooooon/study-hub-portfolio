@@ -54,7 +54,7 @@ def visible_students_qs(user: BaseUser):
         return Student.objects.none()
 
     if user.role == "teacher":  # 担任の先生になる生徒だけ見せる
-        qs = qs.filter(teachers=role_object, organization=role_object.organization)
+        qs = qs.filter(teachers=role_object, organization_id=role_object.organization_id)
         return qs.distinct()
 
     if user.role == "classroom_administrator":  # 生徒が所属している教室の管理者にだけ見せる
@@ -104,7 +104,7 @@ def visible_inactive_students_qs(user: BaseUser):
         return Student.objects.none()
 
     if user.role == "teacher":  # 担任の先生になる生徒だけ見せる
-        qs = qs.filter(teachers=role_object, organization=role_object.organization)
+        qs = qs.filter(teachers=role_object, organization_id=role_object.organization_id)
         return qs.distinct()
 
     if user.role == "classroom_administrator":  # 生徒が所属している教室の管理者にだけ見せる

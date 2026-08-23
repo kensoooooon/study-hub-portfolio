@@ -121,7 +121,7 @@ class StudyReminderQuerySet(models.QuerySet):
             if admin:
                 qs = qs.filter(
                     student__classrooms__in=admin.classrooms.all(),
-                    student__organization=admin.organization,
+                    student__organization_id=admin.organization_id,
                 )
                 return qs
             return self.none()
@@ -132,7 +132,7 @@ class StudyReminderQuerySet(models.QuerySet):
             teacher = user.get_role_object()
             if teacher is None:
                 return self.none()
-            qs = qs.filter(student__teachers=teacher, student__organization=teacher.organization)
+            qs = qs.filter(student__teachers=teacher, student__organization_id=teacher.organization_id)
             return qs
 
         # それ以外のロールには一切見せない

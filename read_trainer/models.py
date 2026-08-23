@@ -1,79 +1,3 @@
-"""
-英単語学習に基づく長文読解問題の出題・解答管理モデル群
-
-このモジュールは、生徒が学習中の語彙（vocab_trainer）に基づいて生成された英語長文と、
-それに関連する読解問題（4択）を記録・管理し、個別に解答履歴を保存する構造を定義します。
-
-構成:
-- ReadingPassage:
-    GPT等により生成された英語長文本文。
-    使用された語彙（WordMeaningContext）との関連や作成者、トークン消費量も保持します。
-
-- ReadingQuestion:
-    1つのReadingPassageに対して複数紐づく4択読解問題。
-    各問題には正答と解説が付属します。
-
-- ReadingAnswer:
-    生徒が特定の問題に対して解答した履歴。
-    正誤判定や解答日時を含み、学習進捗（StudentContextProgress）への反映が可能です。
-
-リレーション図（PlantUML）
-
-@startuml
-skinparam classAttributeIconSize 0
-
-entity ReadingPassage {
-  +id
-  title : str
-  content : text
-  created_by : FK → Student
-  created_at : datetime
-  token_cost : int
-  japanese_translation : text
-  source_type : str
-  eiken_level : str
-}
-
-entity ReadingQuestion {
-  +id
-  passage : FK → ReadingPassage
-  question_text : text
-  option_a : text
-  option_b : text
-  option_c : text
-  option_d : text
-  correct_option : char
-  explanation : text
-  batch_id : int
-}
-
-entity ReadingAnswer {
-  +id
-  question : FK → ReadingQuestion
-  student : FK → Student
-  selected_option : char
-  is_correct : bool
-  answered_at : datetime
-}
-
-entity StudentReadingPassageProgress {
-  +id
-  student : FK → Student
-  passage : FK → ReadingPassage
-  review_priority : float
-  last_reviewed_at : datetime
-}
-
-ReadingPassage ||--o{ ReadingQuestion : has
-ReadingQuestion ||--o{ ReadingAnswer : answered_by
-ReadingPassage ||--o{ StudentReadingPassageProgress : tracked_by
-Student ||--o{ ReadingAnswer
-Student ||--o{ StudentReadingPassageProgress
-ReadingPassage }o--|| WordMeaningContext : uses
-
-@enduml
-
-"""
 from django.db import models
 from accounts.models import Student
 
@@ -119,7 +43,7 @@ class ReadingPassageQuerySet(models.QuerySet):
         if role == "teacher":
             qs = qs.filter(
                 created_by__teachers=role_obj,
-                created_by__organization=role_obj.organization,
+                created_by__organization_id=role_obj.organization_id,
             )
             return qs.distinct()
 
@@ -199,7 +123,7 @@ class ReadingQuestionQuerySet(models.QuerySet):
         if role == "teacher":
             qs = qs.filter(
                 passage__created_by__teachers=role_obj,
-                passage__created_by__organization=role_obj.organization,
+                passage__created_by__organization_id=role_obj.organization_id,
             )
             return qs.distinct()
 
@@ -273,7 +197,7 @@ class ReadingAnswerQuerySet(models.QuerySet):
         if role == "teacher":
             qs = qs.filter(
                 student__teachers=role_obj,
-                student__organization=role_obj.organization,
+                student__organization_id=role_obj.organization_id,
             )
             return qs.distinct()
 
@@ -344,7 +268,7 @@ class StudentReadingPassageProgressQuerySet(models.QuerySet):
         if role == "teacher":
             qs = qs.filter(
                 student__teachers=role_obj,
-                student__organization=role_obj.organization,
+                student__organization_id=role_obj.organization_id,
             )
             return qs.distinct()
 

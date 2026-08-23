@@ -59,7 +59,7 @@ def fix_org_classroom_integrity(dry_run: bool = True) -> Dict[str, Any]:
 
         # org があるのに、別組織の教室をぶら下げている場合 → その教室だけ外す
         if ca.organization:
-            invalid_cls = classrooms.exclude(organization=ca.organization)
+            invalid_cls = classrooms.exclude(organization_id=ca.organization_id)
             if invalid_cls.exists():
                 msg = (
                     f"[CA] {ca} : 異なる組織の教室を切り離し -> "
@@ -76,7 +76,7 @@ def fix_org_classroom_integrity(dry_run: bool = True) -> Dict[str, Any]:
 
         # org があるのに、別組織の教室をぶら下げている場合 → その教室だけ外す
         if teacher.organization:
-            invalid_cls = t_classrooms.exclude(organization=teacher.organization)
+            invalid_cls = t_classrooms.exclude(organization_id=teacher.organization_id)
             if invalid_cls.exists():
                 msg = (
                     f"[Teacher] {teacher} : 異なる組織の教室を切り離し -> "
@@ -88,7 +88,7 @@ def fix_org_classroom_integrity(dry_run: bool = True) -> Dict[str, Any]:
 
         # 3) Student との矛盾は「検出のみ」。組織をまたいで担当している場合は危険なので自動修正しない
         if teacher.organization:
-            cross_org_students = t_students.exclude(organization=teacher.organization)
+            cross_org_students = t_students.exclude(organization_id=teacher.organization_id)
             if cross_org_students.exists():
                 msg = (
                     f"[Teacher] {teacher} : 異なる組織の生徒を担当 -> "
@@ -103,7 +103,7 @@ def fix_org_classroom_integrity(dry_run: bool = True) -> Dict[str, Any]:
 
         # organization があるのに、別組織の教室をぶら下げている場合 → その教室だけ外す
         if student.organization:
-            invalid_cls = s_classrooms.exclude(organization=student.organization)
+            invalid_cls = s_classrooms.exclude(organization_id=student.organization_id)
             if invalid_cls.exists():
                 msg = (
                     f"[Student] {student} : 異なる組織の教室を切り離し -> "

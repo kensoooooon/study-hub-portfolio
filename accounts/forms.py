@@ -160,7 +160,7 @@ class StudentEditForm(forms.ModelForm):
 
         # さらに「生徒の所属組織」に絞る（二重チェック）
         if self.student:
-            qs = qs.filter(organization=self.student.organization)
+            qs = qs.filter(organization_id=self.student.organization_id)
 
         self.fields["teachers"].queryset = qs.distinct()
 

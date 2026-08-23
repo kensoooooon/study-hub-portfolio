@@ -55,14 +55,13 @@ class RegisterNameView(View):
     def _resolve_channel_and_org(self, dest, org_id):
         # ★ dest からチャネル・組織を確定し、トークンのorg_idと一致を検証
         ch = LineChannel.objects.get(bot_user_id=dest, is_active=True)
-        org = ch.organization
         try:
             org_id_int = int(org_id)
         except (TypeError, ValueError):
             raise ValueError("リンクが不正です（組織ID不正）")
-        if org.id != org_id_int:
+        if ch.organization_id != org_id_int:
             raise ValueError("リンクが不正です（組織不一致）")
-        return ch, org
+        return ch, org_id_int
 
     def get(self, request, line_user_id, *args, **kwargs):
         if not line_user_id:
@@ -73,14 +72,14 @@ class RegisterNameView(View):
             return HttpResponse(err, status=400)
 
         try:
-            ch, org = self._resolve_channel_and_org(dest, org_id)
+            ch, org_id_int = self._resolve_channel_and_org(dest, org_id)
         except Exception as e:
             return HttpResponse(str(e), status=400)
 
-        student, error_response = self._get_student_or_403(line_user_id, org_id=org.id)
+        student, error_response = self._get_student_or_403(line_user_id, org_id=org_id_int)
         if error_response:
             return error_response
-        if student.organization_id != org.id:
+        if student.organization_id != org_id_int:
             return HttpResponse("現在、別の教室アカウントでご利用中です。", status=400)
 
         if (student.username or "").strip():
@@ -97,14 +96,14 @@ class RegisterNameView(View):
             return HttpResponse(err, status=400)
 
         try:
-            ch, org = self._resolve_channel_and_org(dest, org_id)
+            ch, org_id_int = self._resolve_channel_and_org(dest, org_id)
         except Exception as e:
             return HttpResponse(str(e), status=400)
 
-        student, error_response = self._get_student_or_403(line_user_id, org_id=org.id)
+        student, error_response = self._get_student_or_403(line_user_id, org_id=org_id_int)
         if error_response:
             return error_response
-        if student.organization_id != org.id:
+        if student.organization_id != org_id_int:
             return HttpResponse("現在、別の教室アカウントでご利用中です。", status=400)
 
         last_name = (request.POST.get("last_name") or "").strip()

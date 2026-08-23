@@ -321,7 +321,7 @@ class StudentListView(LoginRequiredMixin, ListView):
             classrooms = role_obj.classrooms.all()
             qs = base_qs.filter(
                 classrooms__in=classrooms,
-                organization=role_obj.organization,
+                organization_id=role_obj.organization_id,
             ).distinct()
 
             return qs.prefetch_related(
@@ -333,7 +333,7 @@ class StudentListView(LoginRequiredMixin, ListView):
             # Student.teachers は Teacher モデル向けなので teachers=role_obj の方が素直
             qs = base_qs.filter(
                 teachers=role_obj,
-                organization=role_obj.organization,
+                organization_id=role_obj.organization_id,
             ).distinct()
 
             return qs.prefetch_related(

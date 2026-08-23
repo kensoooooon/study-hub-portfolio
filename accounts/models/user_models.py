@@ -266,16 +266,14 @@ class Student(BaseUser):
 
         if self.organization and self.pk:
             # 既に保存済みの場合のみチェック（新規はまだM2Mが無いので）
-            invalid_classrooms = self.classrooms.exclude(organization=self.organization)
+            invalid_classrooms = self.classrooms.exclude(organization_id=self.organization_id)
             if invalid_classrooms.exists():
                 raise ValidationError(
                     {"classrooms": "生徒の所属組織と異なる組織の教室が含まれています。"}
                 )
 
             # 🔐 講師側の所属組織との整合性チェック
-            invalid_teachers = self.teachers.exclude(
-                models.Q(organization=self.organization)
-            )
+            invalid_teachers = self.teachers.exclude(organization_id=self.organization_id)
             if invalid_teachers.exists():
                 raise ValidationError(
                     {"teachers": "生徒の所属組織と異なる組織の講師が含まれています。"}
@@ -314,7 +312,7 @@ class Teacher(BaseUser):
         super().clean()
 
         if self.organization and self.pk:
-            invalid_classrooms = self.classrooms.exclude(organization=self.organization)
+            invalid_classrooms = self.classrooms.exclude(organization_id=self.organization_id)
             if invalid_classrooms.exists():
                 raise ValidationError(
                     {"classrooms": "講師の所属組織と異なる組織の教室が含まれています。"}
@@ -326,7 +324,7 @@ class Teacher(BaseUser):
         """
         return self.students.filter(
             is_active=True,
-            organization=self.organization,
+            organization_id=self.organization_id,
         ).order_by('grade')
 
     def can_be_accessed_by(self, user):
@@ -334,12 +332,12 @@ class Teacher(BaseUser):
         ユーザーがこの講師にアクセスできるかを判定するメソッド
         """
         if user.role == 'organization_administrator':
-            admin = getattr(user, 'organizationadministrator', None)
+            admin = user.get_role_object()
             if admin:
                 # 講師が組織管理者が管理する教室に所属しているかを判定
                 return self.classrooms.filter(organization_id=admin.organization_id).exists()
         elif user.role == 'classroom_administrator':
-            admin = getattr(user, 'classroomadministrator', None)
+            admin = user.get_role_object()
             if admin:
                 # 教室管理者が管理する教室に講師が所属しているかを判定
                 return self.classrooms.filter(id__in=admin.classrooms.values_list('id', flat=True)).exists()
@@ -389,7 +387,7 @@ class ClassroomAdministrator(BaseUser):
         """
         super().clean()
         if self.organization and self.pk:
-            invalid_classrooms = self.classrooms.exclude(organization=self.organization)
+            invalid_classrooms = self.classrooms.exclude(organization_id=self.organization_id)
             if invalid_classrooms.exists():
                 raise ValidationError(
                     {"classrooms": "教室管理者の所属組織と異なる組織の教室が含まれています。"}

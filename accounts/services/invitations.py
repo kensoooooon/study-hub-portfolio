@@ -131,14 +131,14 @@ def _check_invited_user_status(*, normalized_email_address:str, organization_id:
         raise OrganizationAdministratorExistsInAnotherOrganizationError()  # 別の組織に割り当てられている
     elif (user.role == "student") or (user.role == "teacher") or (user.role == "classroom_administrator"):  # 生徒、講師、教室管理者は単体
         role_object = _get_role_object_or_raise(user)
-        belonged_organization = role_object.organization
-        if belonged_organization is None:
+        belonged_organization_id = role_object.organization_id
+        if belonged_organization_id is None:
             logger.error(
                 "ユーザーの所属組織が設定されていません。",
                 extra={"user_id": user.id, "role": user.role},
             )
             raise MissingBelongedOrganizationError("不正なユーザーです。")
-        if belonged_organization.id == organization_id:  # 同じ組織に別ロールとして所属していることが確定
+        if belonged_organization_id == organization_id:  # 同じ組織に別ロールとして所属していることが確定
             raise ExistingUserWrongRoleError()
         else:  # 他の組織で別の役職をやっている
             raise AnotherRoleExistsInAnotherOrganizationError()
