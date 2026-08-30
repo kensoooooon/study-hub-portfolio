@@ -78,6 +78,23 @@ class VisibleStudentsQsOrgAdminTests(TestCase):
         qs = visible_students_qs(self.org1_admin)
         self.assertNotIn(self.org1_inactive_student, qs)
 
+    def test_is_superuser_flag_does_not_widen_visible_students_qs(self):
+        """
+        is_superuserフラグが立っていても、visible_students_qsの可視範囲は
+        roleとテナントスコープのみで決まることを確認する回帰テスト。
+
+        Issue #162でaccess_policiesから `if user.is_superuser: return qs` の
+        早期returnを撤去したことを固定する。is_superuser=Trueの行は生成不可のため
+        メモリ上でフラグを立てる。
+        """
+        self.org1_admin.is_superuser = True  # DBへは保存しない
+
+        qs = visible_students_qs(self.org1_admin)
+
+        self.assertIn(self.org1_student, qs)
+        self.assertNotIn(self.org2_student, qs)
+        self.assertNotIn(self.org1_inactive_student, qs)
+
 
 class VisibleStudentsQsClassroomAdminTests(TestCase):
     """

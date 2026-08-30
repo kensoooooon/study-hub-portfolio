@@ -105,9 +105,6 @@ def visible_students_qs(user: BaseUser, base_qs: QuerySet[Student] | None = None
     if not getattr(user, "is_active", False):
         return qs.none()
 
-    if getattr(user, "is_superuser", False):
-        return qs
-
     role = getattr(user, "role", None)
 
     if role == "student":  # 自身のみ閲覧可能
@@ -166,10 +163,6 @@ def visible_materials_qs(user: BaseUser, base_qs: QuerySet[LearningMaterial] | N
     # 無効ユーザーは常に空（安全側）
     if not getattr(user, "is_active", False):
         return qs.none()
-
-    # スーパーユーザーは全許可
-    if getattr(user, "is_superuser", False):
-        return qs
 
     # 学生可視範囲を subquery で絞る（DB側で処理される）
     accessible_students = visible_students_qs(user)

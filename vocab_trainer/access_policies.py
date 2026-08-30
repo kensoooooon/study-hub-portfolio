@@ -68,9 +68,6 @@ def visible_students_qs(user: BaseUser, base_qs: QuerySet[Student] | None = None
     if not getattr(user, "is_active", False):
         return qs.none()
 
-    if getattr(user, "is_superuser", False):
-        return qs
-
     role = getattr(user, "role", None)
 
     if role == "student":
@@ -128,10 +125,6 @@ def visible_progress_qs(user: BaseUser, base_qs: QuerySet[StudentContextProgress
     if not getattr(user, "is_active", False):
         return qs.none()
 
-    # スーパーユーザーは全許可
-    if getattr(user, "is_superuser", False):
-        return qs
-    
     # 生徒にアクセス可能=進捗にアクセス可能と捉える
     accessible_students = visible_students_qs(user)
     return qs.filter(student_id__in=accessible_students.values_list("id", flat=True))
@@ -255,8 +248,6 @@ def student_can_be_accessed_by(user: BaseUser, student: Student) -> bool:
     """
     if not getattr(user, "is_active", False):
         return False
-    if getattr(user, "is_superuser", False):
-        return True
     # “可視範囲QSに含まれるか” で判定（DB1回）
     return visible_students_qs(user).filter(id=student.id).exists()
 
@@ -272,6 +263,4 @@ def progress_can_be_accessed_by(user: BaseUser, progress: StudentContextProgress
     """
     if not getattr(user, "is_active", False):  # アクティブでないユーザーはNG
         return False
-    if getattr(user, "is_superuser", False):  # スーパーユーザーは即許可
-        return True
     return visible_progress_qs(user).filter(id=progress.id).exists()  # DB側でチェックを入れる

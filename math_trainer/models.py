@@ -74,7 +74,7 @@ from django.db import models
 import uuid
 from django.db.models import UniqueConstraint
 
-from accounts.models import Student, BaseUser
+from accounts.models import Student
 
 from accounts.models.user_models import GradeChoices
 
@@ -116,8 +116,6 @@ class ProblemSessionQuerySet(models.QuerySet):
 
         if not getattr(user, "is_authenticated", False):
             return qs.none()
-        if getattr(user, "is_superuser", False):
-            return qs
 
         role = getattr(user, "role", None)
         if role == "student":
@@ -177,9 +175,6 @@ class ProblemSession(models.Model):
         # 未ログイン
         if not getattr(user, "is_authenticated", False):
             return False
-        # スーパーユーザー
-        if getattr(user, "is_superuser", False):
-            return True
 
         # 生徒本人は自分のセッションのみ（FKの生値で比較＝追加SELECTなし）
         if getattr(user, "role", None) == "student":

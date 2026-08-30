@@ -20,7 +20,6 @@ class RequiresFirstLoginPasswordChangeTests(TestCase):
         self,
         role: str,
         is_first_login: bool = True,
-        is_superuser: bool = False,
     ):
         role_mapping = {
             "student": Student,
@@ -31,13 +30,12 @@ class RequiresFirstLoginPasswordChangeTests(TestCase):
         user_model = role_mapping[role]
 
         kwargs = dict(
-            email=f"{role}_{is_first_login}_{is_superuser}@example.com",
+            email=f"{role}_{is_first_login}@example.com",
             password="testpass123",
-            username=f"{role}_{is_first_login}_{is_superuser}",
+            username=f"{role}_{is_first_login}",
             is_first_login=is_first_login,
-            is_superuser=is_superuser,
         )
-        if role in ("student", "teacher", "classroom_administrator"):
+        if role in ("student", "teacher", "classroom_administrator", "organization_administrator"):
             kwargs["organization"] = self.org
 
         user = user_model.objects.create_user(**kwargs)
@@ -70,9 +68,19 @@ class RequiresFirstLoginPasswordChangeTests(TestCase):
 
     def test_superuser_excluded(self):
         """
-        スーパーユーザーもまたis_first_login=Trueだったとしても、初回ログイン扱いにはならない
+        is_superuserフラグの付いたユーザーは、is_first_login=Trueでも
+        初回ログイン扱いにならないことを確認する回帰テスト。
+
+        Issue #162でrequires_first_login_password_change()から明示的な
+        is_superuser判定を撤去したため、除外はroleゲート
+        (organization_administratorはTARGET_ROLESに含まれない)が担う。
+        is_superuser=Trueの行はCheckConstraintにより生成不可のため、
+        メモリ上のインスタンスにフラグを立てて検証する。
         """
-        user = self._make_user("organization_administrator", is_first_login=True, is_superuser=True)
+        user = self._make_user(
+            "organization_administrator", is_first_login=True
+        )
+        user.is_superuser = True  # DBへは保存しない（CheckConstraintにより不可）
         self.assertFalse(requires_first_login_password_change(user))
 
     def test_is_first_login_false_excluded_student(self):

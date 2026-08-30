@@ -14,7 +14,6 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
@@ -25,7 +24,6 @@ handler403 = 'accounts.views.custom_permission_denied_view'
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),  # アカウント関連
     path('conversations/', include('conversations.urls')),  # 既存のconversationsアプリ(現状利用予定なし)
     path('line/', include('line_integration.urls')),  # LINE連携用アプリ

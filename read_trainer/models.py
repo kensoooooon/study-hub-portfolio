@@ -18,9 +18,6 @@ class ReadingPassageQuerySet(models.QuerySet):
         if not getattr(user, "is_authenticated", False):
             return qs.none()
 
-        if getattr(user, "is_superuser", False):
-            return qs
-
         # 不正なロールを弾く
         role = getattr(user, "role", None)
         if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:  # 想定したロールのみ許容
@@ -98,9 +95,6 @@ class ReadingQuestionQuerySet(models.QuerySet):
         if not getattr(user, "is_authenticated", False):
             return qs.none()
 
-        if getattr(user, "is_superuser", False):
-            return qs
-
         # 不正なロールを弾く
         role = getattr(user, "role", None)
         if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:  # 想定したロールのみ許容
@@ -172,9 +166,6 @@ class ReadingAnswerQuerySet(models.QuerySet):
         if not getattr(user, "is_authenticated", False):
             return qs.none()
 
-        if getattr(user, "is_superuser", False):
-            return qs
-
         # 不正なロールを弾く
         role = getattr(user, "role", None)
         if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:  # 想定したロールのみ許容
@@ -242,9 +233,6 @@ class StudentReadingPassageProgressQuerySet(models.QuerySet):
 
         if not getattr(user, "is_authenticated", False):
             return qs.none()
-
-        if getattr(user, "is_superuser", False):
-            return qs
 
         # 不正なロールを弾く
         role = getattr(user, "role", None)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 from django.core.exceptions import PermissionDenied
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -12,13 +14,12 @@ class AuthViewsTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
 
-    def _make_user(self, *, role: str, is_superuser: bool = False, is_first_login: bool = False):
+    def _make_user(self, *, role: str, is_first_login: bool = False):
         user = BaseUser.objects.create_user(
             email=f"{role}@example.com",
             password="testpass123",
             username=f"{role}_user",
             role=role,
-            is_superuser=is_superuser,
         )
         user.is_first_login = is_first_login
         user.save(update_fields=["is_first_login"])
@@ -31,12 +32,52 @@ class AuthViewsTests(TestCase):
         view.setup(request)
         return view
 
-    def test_get_success_url_for_superuser(self):
-        user = self._make_user(role="organization_administrator", is_superuser=True)
+    def test_form_valid_rejects_superuser_before_auth_login(self):
+        """
+        is_superuserのユーザーは、auth_login()を実行するsuper().form_valid()より
+        前にPermissionDeniedとなり、セッションが発行されないことを確認する回帰テスト。
 
-        view = self._build_login_view(user)
+        旧実装はauth_login()実行後のget_success_url()でsuperuserを弾いており、
+        画面上は403でもセッションCookieは発行済みだった(Issue #156の実証)。
+        Issue #162でform_valid()の冒頭・auth_login()の前に判定するよう是正した。
+        is_superuser=Trueの行はCheckConstraintにより生成不可のため、
+        認証フォームをMagicMockで代用する。
+        """
+        request = self.factory.post(reverse("accounts_auth:login"))
+        view = CustomLoginView()
+        view.setup(request)
 
-        self.assertEqual(view.get_success_url(), reverse("admin:index"))
+        form = MagicMock()
+        form.get_user.return_value = MagicMock(is_superuser=True)
+
+        with patch(
+            "django.contrib.auth.views.LoginView.form_valid"
+        ) as mock_super_form_valid:
+            with self.assertRaises(PermissionDenied):
+                view.form_valid(form)
+
+        mock_super_form_valid.assert_not_called()
+
+    def test_form_valid_allows_non_superuser(self):
+        """
+        通常ロールのユーザーはform_valid()で拒否されず、
+        auth_login()を実行するsuper().form_valid()へ処理が渡ることを確認する。
+        """
+        request = self.factory.post(reverse("accounts_auth:login"))
+        view = CustomLoginView()
+        view.setup(request)
+
+        form = MagicMock()
+        form.get_user.return_value = MagicMock(is_superuser=False)
+
+        sentinel = object()
+        with patch(
+            "django.contrib.auth.views.LoginView.form_valid", return_value=sentinel
+        ) as mock_super_form_valid:
+            result = view.form_valid(form)
+
+        mock_super_form_valid.assert_called_once_with(form)
+        self.assertIs(result, sentinel)
 
     def test_get_success_url_for_organization_administrator(self):
         user = self._make_user(role="organization_administrator")
@@ -118,6 +159,14 @@ class AuthViewsTests(TestCase):
 
         with self.assertRaises(PermissionDenied):
             view.get_success_url()
+
+    def test_admin_url_is_not_mounted(self):
+        """
+        Issue #158で/admin/のマウントをurls.pyから削除したことを確認する回帰テスト。
+        """
+        resp = self.client.get("/admin/")
+
+        self.assertEqual(resp.status_code, 404)
 
     def test_logout_get_returns_405(self):
         user = self._make_user(role="organization_administrator")

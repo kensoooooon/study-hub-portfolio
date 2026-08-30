@@ -18,9 +18,6 @@ class ListeningPassageQuerySet(models.QuerySet):
         if not getattr(user, "is_authenticated", False):
             return qs.none()
 
-        if getattr(user, "is_superuser", False):
-            return qs
-
         role = getattr(user, "role", None)
         if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:
             return qs.none()
@@ -96,9 +93,6 @@ class ListeningQuestionQuerySet(models.QuerySet):
         if not getattr(user, "is_authenticated", False):
             return qs.none()
 
-        if getattr(user, "is_superuser", False):
-            return qs
-
         role = getattr(user, "role", None)
         if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:
             return qs.none()
@@ -168,9 +162,6 @@ class ListeningAnswerQuerySet(models.QuerySet):
         if not getattr(user, "is_authenticated", False):
             return qs.none()
 
-        if getattr(user, "is_superuser", False):
-            return qs
-
         role = getattr(user, "role", None)
         if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:
             return qs.none()
@@ -235,9 +226,6 @@ class StudentListeningPassageProgressQuerySet(models.QuerySet):
 
         if not getattr(user, "is_authenticated", False):
             return qs.none()
-
-        if getattr(user, "is_superuser", False):
-            return qs
 
         role = getattr(user, "role", None)
         if role not in ["organization_administrator", "classroom_administrator", "teacher", "student"]:

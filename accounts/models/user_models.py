@@ -19,6 +19,13 @@ from .organization_models import Classroom, Organization
 from accounts.services.normalize_email import normalize_email
 
 
+# Issue #162: is_superuser はテナント境界・権限をバイパスするため、本プロジェクトでは
+# 一切許可しない。生成経路 (create_user / create_superuser / save()) で明示的に例外を
+# 送出し、DB レベルでは BaseUser.Meta の CheckConstraint が最終防御となる。
+IS_SUPERUSER_DISABLED_MSG = (
+    "is_superuser=True のユーザーは作成できません "
+    "(Issue #162: テナント境界・権限バイパス排除のため無効化済み)。"
+)
 
 
 class BaseUserManager(BaseUserManager):
@@ -26,6 +33,8 @@ class BaseUserManager(BaseUserManager):
     カスタムユーザーのマネージャークラス
     """
     def create_user(self, email=None, password=None, **extra_fields):
+        if extra_fields.get('is_superuser'):
+            raise ValueError(IS_SUPERUSER_DISABLED_MSG)
         if not email and 'role' in extra_fields and extra_fields['role'] != 'student':
             raise ValueError("メールアドレスは生徒以外には必須です")
         if email:
@@ -36,16 +45,8 @@ class BaseUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('role', 'organization_administrator')
-
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('スーパーユーザーはis_staff=Trueである必要があります')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('スーパーユーザーはis_superuser=Trueである必要があります')
-
-        return self.create_user(email, password, **extra_fields)
+        # createsuperuser コマンド等から呼ばれた際に「なぜ失敗したか」を明示する。
+        raise ValueError(IS_SUPERUSER_DISABLED_MSG)
 
 
 class BaseUser(AbstractBaseUser, PermissionsMixin):
@@ -76,6 +77,18 @@ class BaseUser(AbstractBaseUser, PermissionsMixin):
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
+    class Meta:
+        constraints = [
+            # Issue #162: is_superuser=True を DB レベルで一切許可しない。
+            # Python 側のガード (create_user / create_superuser / save()) を
+            # 経由しない queryset.update() / bulk_create() / bulk_update() /
+            # 生 SQL も含めて拒否する最終防御。
+            models.CheckConstraint(
+                condition=models.Q(is_superuser=False),
+                name="ck_baseuser_is_superuser_always_false",
+            ),
+        ]
+
     def clean(self):
         """
         バリデーション: 生徒以外はメールアドレスが必須
@@ -105,8 +118,119 @@ class BaseUser(AbstractBaseUser, PermissionsMixin):
         return None
 
     def save(self, *args, **kwargs):
+        # Issue #162: 全 MTI サブクラス (Student / Teacher / ClassroomAdministrator /
+        # OrganizationAdministrator) の save() は super().save() 経由でここを通るため、
+        # このガード 1 点で全書き込み経路 (create_user 含む) を塞げる。
+        # save() を経由しない queryset.update() / bulk_create() 等は
+        # BaseUser.Meta の CheckConstraint が DB レベルで拒否する。
+        if self.is_superuser:
+            raise ValueError(IS_SUPERUSER_DISABLED_MSG)
         self.email = normalize_email(self.email)
         super().save(*args, **kwargs)
+
+    # ------------------------------------------------------------------
+    # is_superuser による権限バイパスの無効化 (Issue #162)
+    # ------------------------------------------------------------------
+    # is_superuser は本来 2 箇所で「全権限」を与える:
+    #   (1) PermissionsMixin.has_perm / has_module_perms の
+    #       `if self.is_active and self.is_superuser: return True` 短絡
+    #   (2) ModelBackend._get_permissions の
+    #       `if user_obj.is_superuser: perms = Permission.objects.all()`
+    # (1) を外すだけだと _user_has_perm 経由で (2) が到達可能になり、
+    # 非オブジェクト権限チェックのバイパスが残る。ここでは (1)(2) の
+    # どちらの superuser 分岐も通らず、明示付与された権限だけで判定する。
+    # 非 superuser に対する評価は ModelBackend の通常評価
+    # (user_permissions と group 経由 permission の合算) と一致する。
+    #
+    # 注意: obj 単位の権限を付与する認証 backend は本プロジェクトに存在
+    # しない (AUTHENTICATION_BACKENDS 未設定 = ModelBackend のみ)。
+    # 将来 AUTHENTICATION_BACKENDS にカスタム backend を追加する場合は
+    # この実装の見直しが必要。
+    def _explicit_permission_labels(self):
+        """user_permissions と groups に明示付与された権限ラベル集合を返す。
+
+        Returns:
+            set[str]: "{app_label}.{codename}" 形式の権限ラベル集合。
+                非アクティブユーザーは常に空集合。
+        """
+        if not self.is_active:
+            return set()
+
+        cache_attr = "_explicit_perm_label_cache"  # この属性が存在すればキャッシュを利用する
+        if not hasattr(self, cache_attr):  # 初回のみ付与の動作
+            from django.contrib.auth.models import Permission
+
+            perms = (
+                Permission.objects.filter(
+                    models.Q(user=self) | models.Q(group__user=self)
+                )
+                .values_list("content_type__app_label", "codename")
+                .order_by()
+            )
+            setattr(
+                self,
+                cache_attr,
+                {f"{app_label}.{codename}" for app_label, codename in perms},
+            )
+        return getattr(self, cache_attr)
+
+    def has_perm(self, perm, obj=None):
+        """is_superuser による全権限付与を無効化した権限判定。
+
+        Args:
+            perm (str): "{app_label}.{codename}" 形式の権限。
+            obj: オブジェクト単位判定の対象。本プロジェクトでは
+                これを解決する backend が無いため、指定時は常に False。
+
+        Returns:
+            bool: 明示付与された権限に含まれる場合のみ True。
+        """
+        if not self.is_active:
+            return False
+        if obj is not None:
+            return False
+        return perm in self._explicit_permission_labels()
+
+    def has_module_perms(self, app_label):
+        """is_superuser による全権限付与を無効化した app 単位の権限判定。
+
+        Args:
+            app_label (str): 対象アプリのラベル。
+
+        Returns:
+            bool: 当該 app に明示付与された権限を 1 つ以上持つ場合のみ True。
+        
+        Notes:
+            現在のプロジェクトにおいてはこちらのメソッドは利用されていない
+            予防的措置である点に注意
+        """
+        if not self.is_active:
+            return False
+        prefix = f"{app_label}."
+        return any(
+            label.startswith(prefix) for label in self._explicit_permission_labels()
+        )
+
+    def get_all_permissions(self, obj=None):
+        """is_superuser による全権限付与を無効化した全権限取得。
+
+        Args:
+            obj: オブジェクト単位判定の対象。本プロジェクトでは
+                これを解決する backend が無いため、指定時は常に空集合。
+
+        Returns:
+            set[str]: "{app_label}.{codename}" 形式の権限ラベル集合。
+                非アクティブユーザーは常に空集合。
+            
+        Notes:
+            現在のプロジェクトにおいてはこちらのメソッドは利用されていない
+            has_module_perms同様に予防的措置である点に留意すること
+        """
+        if not self.is_active:
+            return set()
+        if obj is not None:
+            return set()
+        return self._explicit_permission_labels()
 
 
 class StudentQuerySet(models.QuerySet):

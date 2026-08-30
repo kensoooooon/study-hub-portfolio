@@ -22,9 +22,6 @@ def requires_first_login_password_change(user: BaseUser) -> bool:
     if not getattr(user, "is_authenticated", False):
         return False
 
-    if getattr(user, "is_superuser", False):
-        return False
-
     if getattr(user, "role", None) not in TARGET_ROLES:
         return False
 

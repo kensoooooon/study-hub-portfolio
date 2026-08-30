@@ -15,13 +15,12 @@ class FirstLoginMiddlewareTests(TestCase):
         self.factory = RequestFactory()
         self.middleware = FirstLoginMiddleware(_dummy_response)
 
-    def _make_user(self, role: str, is_first_login: bool = True, is_superuser: bool = False):
+    def _make_user(self, role: str, is_first_login: bool = True):
         user = BaseUser.objects.create_user(
-            email=f"{role}_{is_first_login}_{is_superuser}@example.com",
+            email=f"{role}_{is_first_login}@example.com",
             password="testpass123",
-            username=f"{role}_{is_first_login}_{is_superuser}",
+            username=f"{role}_{is_first_login}",
             role=role,
-            is_superuser=is_superuser,
         )
         user.is_first_login = is_first_login
         user.save(update_fields=["is_first_login"])
@@ -76,9 +75,18 @@ class FirstLoginMiddlewareTests(TestCase):
 
     def test_superuser_not_redirected(self):
         """
-        スーパーユーザーは初回ログイン状態であっても、リダイレクト対象外
+        is_superuserフラグの付いたユーザーは、FirstLoginMiddlewareの
+        リダイレクト対象外であることを確認する回帰テスト。
+
+        Issue #162でrequires_first_login_password_change()から明示的な
+        is_superuser判定を撤去したため、除外はroleゲート
+        (organization_administratorはTARGET_ROLESに含まれない)が担う。
+        なお実リクエストパイプラインでは、この手前のRejectSuperuserMiddlewareが
+        is_superuserを403で弾くため、FirstLoginMiddlewareには到達しない。
+        is_superuser=Trueの行は生成不可のためメモリ上でフラグを立てる。
         """
-        user = self._make_user("organization_administrator", is_superuser=True)
+        user = self._make_user("organization_administrator")
+        user.is_superuser = True  # DBへは保存しない（CheckConstraintにより不可）
         resp = self._get(reverse("organization_admin:classroom_list"), user)
         self.assertEqual(resp.status_code, 200)
 
